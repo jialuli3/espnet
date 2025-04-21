@@ -14,7 +14,7 @@ set -o pipefail
 # ... by calling this script as, for example,
 # ./run.sh --mic sdm1
 # ./run.sh --mic mdm8
-mic=ihm
+mic=sdm1
 
 train_set=${mic}_train
 valid_set=${mic}_dev

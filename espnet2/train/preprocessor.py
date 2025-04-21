@@ -2664,7 +2664,7 @@ class SpeechLMPreprocessor(AbsPreprocessor):
             conti_feat = None
 
         # Other discrete modalities
-        elif modality in ["ssl", "text_bpe", "g2p", "video_ssl", "svs_lb"]:
+        elif modality in ["ssl", "text_bpe", "g2p", "video_ssl", "svs_lb", "diar_tokenizer"]:
 
             if modality in ["text_bpe", "g2p"]:
                 if isinstance(value, str):
@@ -2690,11 +2690,13 @@ class SpeechLMPreprocessor(AbsPreprocessor):
             elif modality in ["ssl", "video_ssl"]:
                 value = value + self.token_bias[modality][0]
             
-            elif modality in ["svs_lb"]:
+            elif modality in ["svs_lb", "diar_tokenizer"]:
+                logging.info(f"Use diar tokenizer, {value}")
                 value = value.split(" ")  # str to token list, no '\n'
                 value = self.converter.tokens2ids(value)
                 value = np.array(value)  # NOTE(yiwen) don't need to add token bias
-            
+                logging.info(f"Diarized tokens, {value}")
+
             else:
                 raise NotImplementedError
 

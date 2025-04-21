@@ -122,6 +122,8 @@ def dump_codec(
     buffer, length_buffer, key_buffer = [], [], []
     wav_reader_len = len(open(rspecifier.split(":")[1]).readlines())
     for idx, (key, (sample_rate, wav)) in enumerate(wav_reader):
+        if wav.ndim > 1:
+            wav = wav[:,]
         if sample_rate != tokenizer.sample_rate:
             raise ValueError("Sample rate mismatch between input audio and codec model")
 

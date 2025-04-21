@@ -28,6 +28,7 @@ SECONDS=0
 # General configuration
 stage=1              # Processes starts from the specified stage.
 stop_stage=10     # Processes is stopped at the specified stage.
+codec_stage=1
 skip_data_prep=false # Skip data preparation stages.
 skip_train=false     # Skip training stages.
 skip_eval=false      # Skip decoding and evaluation stages.
@@ -47,6 +48,19 @@ python=python3       # Specify python to execute espnet commands.
 local_data_opts=""  # Options to be passed to local/data.sh.
 data_name=""        # The name of current dataset to prepare
 task=               # when task is multi_task, skip data preparation and use train/valid jsons
+dataset_dir="/ocean/projects/cis210027p/shared/corpora/amicorpus"
+output_dir="data"
+wav_out_dir="${output_dir}/wav"
+pit_method="arrive" # can be arrive or most time ordered
+output_format="event" # can be event or frame-based
+dur=3 # duration of each audio file
+skip=3 # skip duration 
+spk_format="spk_idx"
+mic="sdm"
+use_extra_info=false
+use_random_durs=false
+frame_res=0.1
+data_outputs="wav text diar_tokens"
 
 # Data combination related (stage 6+)
 data_combo_name=""  # The name of data combination for training, This usually means a combination of several
@@ -63,7 +77,7 @@ max_wav_duration=30        # Maximum duration in second.
 fs=16000                   # Sampling rate.
 
 # Training related
-train_config=""    # Config for training.
+train_config="conf/train_delay_smollm_1.7b.yaml"    # Config for training.
 train_args=""      # Arguments for training, e.g., "--max_epoch 1".
                    # Note that it will overwrite args in train config.
 tag=""             # Suffix for training directory.
@@ -72,7 +86,7 @@ speechlm_stats_dir=""   # Specify the directory path for statistics. If empty, a
 num_splits=1       # Number of splitting for tts corpus.
 
 # Decoding related
-inference_config="" # Config for decoding.
+inference_config="conf/decode_sd.yaml" # Config for decoding.
 inference_args=""   # Arguments for decoding (e.g., "--threshold 0.75").
                     # Note that it will overwrite args in inference config.
 inference_tag=""    # Suffix for decoding directory.
@@ -91,9 +105,20 @@ scoring_args=
 additional_ref_files=
 
 # [Task dependent] Set the datadir name created by local/data.sh
-train_set=""     # Name of training set.
-valid_set=""     # Name of validation set used for monitoring/tuning network training.
-test_sets=""     # Names of test sets. Multiple items (e.g., both dev and eval sets) can be specified.
+train_set="train"     # Name of training set.
+valid_set="dev"     # Name of validation set used for monitoring/tuning network training.
+test_sets="test"     # Names of test sets. Multiple items (e.g., both dev and eval sets) can be specified.
+dsets=
+
+
+
+# Evaluation related
+ref_rttm_file=data/${test_sets}/rttm
+uem_file=data/${test_sets}/all.uem
+test_wav_scp=data/${test_sets}/wav.scp
+apply_clustering=false
+skip_interval=1
+
 
 # Tokenization related
 # (1) codec
@@ -130,6 +155,9 @@ bpe_char_cover=1.0  # character coverage when modeling with sentencepiece.
 textlm_hf_model_tag=
 textlm_max_words=1000
 
+# (6) Diarization corpus
+diar_token_list="data/diar_corpus/diar_corpus_spk9_dur30"
+
 # (100) other general
 nlsyms_txt=none
 token_list_dir=
@@ -138,6 +166,8 @@ token_list_dir=
 hf_repo=
 
 help_message=""
+# set up cmd backend
+cmd_backend="slurm"
 
 log "$0 $*"
 # Save command line args for logging (they will be lost after utils/parse_options.sh)
@@ -151,7 +181,7 @@ if [ $# -ne 0 ]; then
 fi
 
 . ./path.sh
-. ./cmd.sh
+. ./cmd.sh --cmd_backend ${cmd_backend} 
 
 # Check for stage 1-5: data prep
 if ! "${skip_data_prep}"; then
@@ -251,9 +281,38 @@ global_ngpu=$((ngpu * num_nodes))
 
 if ! "${skip_data_prep}"; then
     if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
-        log "Stage 1: Data preparation for data/${train_set}, data/${valid_set}, etc."
+        log "Stage 1: Data preparation."
         # [Task dependent] Need to create data.sh for new corpus
-        local/data.sh ${local_data_opts}
+        _opts=
+
+        if ${use_random_durs}; then
+            _opts+="--use_random_durs true "
+        fi
+        if ${skip_train}; then
+            _dsets=("${test_sets}")
+        else
+            _dsets=("${train_set} ${valid_set} ${test_sets}")
+        fi
+
+        for dset in ${_dsets}; do
+            for data_output in ${data_outputs}; do
+                local/data.sh \
+                    --dataset_dir "${dataset_dir}" \
+                    --output_dir "${output_dir}" \
+                    --wav_out_dir "${wav_out_dir}" \
+                    --mic "${mic}" \
+                    --dur "${dur}" \
+                    --skip "${skip}" \
+                    --pit_method "${pit_method}" \
+                    --spk_format "${spk_format}" \
+                    --curr_sets ${dset} \
+                    --use_extra_info ${use_extra_info} \
+                    --frame_res "${frame_res}" \
+                    --data_outputs ${data_output} \
+                    ${_opts}
+            done
+        done
+
     fi
 
     if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then
@@ -269,22 +328,32 @@ if ! "${skip_data_prep}"; then
         if ${skip_train}; then
             _dsets=${test_sets}
         else
-            _dsets="${train_set} ${valid_set} ${test_sets}"
+            #_dsets="${train_set} ${valid_set} ${test_sets}"
+            _dsets="${valid_set}"
         fi
 
         for dset in ${_dsets}; do
             mkdir -p ${data_audio}/${dset}
 
             for triplet in ${all_triplets}; do
+                log "triplet ${triplet}"
                 IFS=',' read -r _name _modality _type <<< "${triplet}"
 
                 if [ ${_modality} == "codec" ] || [ ${_modality} == "ssl" ] || [ ${_modality} == "codec_ssl" ]; then
-
                     # Format audio
                     _opts=
-                    if [ -e data/"${dset}"/segments ]; then
-                        _opts+="--segments data/${dset}/segments "
+                    if ${use_random_durs}; then
+                        log "data/"${dset}"/segments_random_dur_30_20_15_8"
+                        if [ -e data/"${dset}"/segments_random_dur_30_20_15_8 ]; then
+                            _opts+="--segments data/${dset}/segments_random_dur_30_20_15_8 "
+                        fi
+                    else
+                        log "data/"${dset}"/segments_dur${dur}_skip${skip}"
+                        if [ -e data/"${dset}"/segments_dur${dur}_skip${skip} ]; then
+                            _opts+="--segments data/${dset}/segments_dur${dur}_skip${skip} "
+                        fi
                     fi
+                    
                     scripts/audio/format_wav_scp.sh --nj "${nj}" --cmd "${train_cmd}" \
                     --audio-format "${audio_format}" --fs "${fs}" \
                     --out_filename ${_name} ${_opts} \
@@ -302,6 +371,7 @@ if ! "${skip_data_prep}"; then
 
                 else
                     # Other non-speech items
+                    log "data/${dset}/${_name}"
                     <"data/${dset}/${_name}" \
                     awk ' { if( NF != 1 ) print $0; } ' >"${data_audio}/${dset}/${_name}"
                 fi
@@ -316,17 +386,19 @@ if ! "${skip_data_prep}"; then
     if [ ${stage} -le 5 ] && [ ${stop_stage} -ge 5 ]; then
         log "Stage 5: Prepare each data entry for the given task"
         if ${skip_train}; then
-            _dsets=${test_sets}
+            _dsets="${test_sets}"
         else
-            _dsets="${train_set} ${valid_set} ${test_sets}"
+            #_dsets="${train_set} ${valid_set} ${test_sets}"
+            _dsets="${train_set}"
         fi
-
+        
         # Parse the data preparation operations from Python task definition.
         all_triplets=$(python -c "from espnet2.speechlm.definitions import SPEECHLM_TASKS; print(SPEECHLM_TASKS['${task}'].data_triplets_string)")
+        log $all_triplets
 
         for dset in ${_dsets}; do
             opts=""
-            for triplet in ${all_triplets}; do
+            for triplet in ${all_triplets}; do 
                 mkdir -p ${data_feats}/${dset}/token_lists
 
                 IFS=',' read -r _name _modality _type <<< "${triplet}"
@@ -370,7 +442,8 @@ if ! "${skip_data_prep}"; then
                         --ssl_kmeans_path ${ssl_kmeans_path} \
                         --ssl_nlayer ${ssl_nlayer} \
                         --ssl_hf_model_tag ${ssl_hf_model_tag} \
-                        --ssl_batch_bins ${ssl_batch_bins}
+                        --ssl_batch_bins ${ssl_batch_bins} \
+                        --stage ${codec_stage}
 
                 elif [ ${_modality} == "ssl" ]; then
 
@@ -425,6 +498,7 @@ if ! "${skip_data_prep}"; then
                     cp "${data_audio}/${dset}/${_name}" "${data_feats}/${dset}/${_name}"
 
                 elif [ ${_modality} == "text_bpe" ]; then
+                    log "Prepare text_bpe"
                     if [ "${subword_choice}" == "huggingface" ]; then
                         if [ -z ${subword_model} ]; then
                             log "Specify hf_tokenizer to use HuggingFace pre-trained tokenizer" && exit 1;
@@ -474,6 +548,10 @@ if ! "${skip_data_prep}"; then
                 elif [ ${_modality} == "spk" ]; then
                     echo "copy utt2spk file"
                     cp "${data_audio}/${dset}/${_name}" "${data_feats}/${dset}/${_name}"
+                elif [ ${_modality} == "diar_tokenizer" ]; then
+                    log "Use diar_tokenizer"
+                    log "${data_feats}/${dset}/token_lists/diar_tokenizer_token_list"
+                    cp "${diar_token_list}" "${data_feats}/${dset}/token_lists/diar_tokenizer_token_list"
 
                 else
                     echo "Unsupported modality ${_modality}" && exit 1;
@@ -716,6 +794,7 @@ if ! "${skip_eval}"; then
         fi
 
         for test_json in ${test_jsons}; do
+            echo ${test_json}
             task=$(grep -o '"task": *[^,}]*' ${test_json} | sed -e 's/"task": *//' -e 's/"//g')
             dset=$(basename $(dirname "${test_json}"))
             _dir="${speechlm_exp}/${inference_tag}/${task}_${dset}"
@@ -774,6 +853,8 @@ if ! "${skip_eval}"; then
             _src_dir="$(dirname "${test_json}")"
             _dset="$(basename ${_src_dir})"
             _dir="${speechlm_exp}/${inference_tag}/${task}_${_dset}";
+            _logdir="${_dir}/log"
+            mkdir -p ${_logdir}
             mkdir -p ${_dir}/eval_cache
 
             target_triplets=$(python -c "from espnet2.speechlm.definitions import SPEECHLM_TASKS; print(SPEECHLM_TASKS['${task}'].target_string)")
@@ -825,14 +906,44 @@ if ! "${skip_eval}"; then
             done | sort | uniq > ${_dir}/eval_cache/key_file
 
             # (3) Task-specific evaluation
-            ./scripts/utils/speechlm_eval/eval_${task}.sh \
-                --gen_dir ${_dir} \
-                --ref_dir ${_dir}/eval_cache \
-                --key_file ${_dir}/eval_cache/key_file \
-                --nj ${nj} \
-                --inference_nj ${inference_nj} \
-                --gpu_inference ${gpu_inference} \
-                --nbest ${nbest} ${scoring_args}
+            #./scripts/utils/speechlm_eval/eval_${task}.sh \
+            # ./scripts/utils/speechlm_eval/eval_asr.sh \
+            #     --gen_dir ${_dir} \
+            #     --ref_dir ${_dir}/eval_cache \
+            #     --key_file ${_dir}/eval_cache/key_file \
+            #     --nj ${nj} \
+            #     --inference_nj ${inference_nj} \
+            #     --gpu_inference ${gpu_inference} \
+            #     --nbest ${nbest} ${scoring_args}
+
+            if ${apply_clustering}; then
+                log "Evaluation started... log: '${_logdir}/speechlm_evaluation_clustered.*.log'"
+                ${_cmd} --gpu "${_ngpu}" JOB=1:"${inference_nj}" "${_logdir}"/speechlm_evaluation_clustered.JOB.log \
+                    ./scripts/utils/speechlm_eval/eval_der.sh \
+                        --ref_rttm_file ${ref_rttm_file} \
+                        --uem_file ${uem_file} \
+                        --gen_dir ${_dir}/eval_cache \
+                        --output_dir ${_dir} \
+                        --hyp_format ${output_format} \
+                        --speaker_order_method ${pit_method} \
+                        --spk_format ${spk_format} \
+                        --test_wav_scp ${test_wav_scp} \
+                        --apply_clustering ${apply_clustering} \
+                        --skip_interval ${skip_interval} \
+                        || { cat $(grep -l -i error "${_logdir}"/speechlm_evaluation_clustered.*.log) ; exit 1; }
+            else 
+                log "Evaluation started..."
+                ./scripts/utils/speechlm_eval/eval_der.sh \
+                        --ref_rttm_file ${ref_rttm_file} \
+                        --uem_file ${uem_file} \
+                        --gen_dir ${_dir}/eval_cache \
+                        --output_dir ${_dir} \
+                        --hyp_format ${output_format} \
+                        --speaker_order_method ${pit_method} \
+                        --spk_format ${spk_format} \
+                        --test_wav_scp ${test_wav_scp} \
+                        --skip_interval ${skip_interval} 
+            fi
         done
     fi
 else

@@ -1641,7 +1641,7 @@ class AbsTask(ABC):
                 from espnet2.train.deepspeed_trainer import DeepSpeedTrainer
 
                 cls.trainer = DeepSpeedTrainer
-
+                
             # Don't give args to trainer.run() directly!!!
             # Instead of it, define "Options" object and build here.
             trainer_options = cls.trainer.build_options(args)
@@ -2283,6 +2283,7 @@ class AbsTask(ABC):
             args = yaml.safe_load(f)
         args = argparse.Namespace(**args)
         model = cls.build_model(args)
+        logging.info(f"model: {model}")
         if not isinstance(model, AbsESPnetModel):
             raise RuntimeError(
                 f"model must inherit {AbsESPnetModel.__name__}, but got {type(model)}"
@@ -2294,10 +2295,18 @@ class AbsTask(ABC):
             create_adapter(model, args.adapter, args.adapter_conf)
 
         if model_file is not None:
-            if device == "cuda":
+            if device.startswith("cuda"):
                 # NOTE(kamo): "cuda" for torch.load always indicates cuda:0
                 #   in PyTorch<=1.4
                 device = f"cuda:{torch.cuda.current_device()}"
+            state_dict = torch.load(model_file, map_location='cpu')
+            if 'model' in state_dict:
+                state_dict = state_dict['model']
+                logging.info(f"state dict, {state_dict}")
+            model.load_state_dict(
+                state_dict,
+                strict=True,
+            )
             try:
                 state_dict = torch.load(model_file, map_location='cpu')
                 if 'model' in state_dict:
@@ -2341,6 +2350,6 @@ class AbsTask(ABC):
                         )
                     else:
                         raise
-
+        logging.info(f"device, {device}")
         model = model.to(device)
         return model, args

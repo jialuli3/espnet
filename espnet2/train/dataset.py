@@ -414,6 +414,16 @@ DATA_TYPES = {
         "   utterance_id_B foo bar\n"
         "   ...",
     ),
+    "diar_tokens": dict(
+        func=read_2columns_text,
+        kwargs=[],
+        help="Return text as is. The text must be converted to ndarray "
+        "by 'preprocess'."
+        "\n\n"
+        "   utterance_id_A hello world\n"
+        "   utterance_id_B foo bar\n"
+        "   ...",
+    ),
     "random_text": dict(
         func=RandomTextReader,
         kwargs=[],

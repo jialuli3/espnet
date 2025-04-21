@@ -161,6 +161,8 @@ def dump_label(
             utt2num_samples=args.utt2num_samples,
             batch_bins=kwargs.get("batch_bins", 1),
         )
+        logger.info(f"finished building data iterator")
+
         with file_writer_helper(
             wspecifier,
             filetype=out_filetype,
@@ -173,6 +175,7 @@ def dump_label(
                 for idx, utt in enumerate(utt_ids):
                     lab = apply_kmeans(feats[idx][: feats_lens[idx]].numpy())
                     writer[utt] = lab.astype(np.int32)
+                logger.info(f"{utt_ids}")
 
     logger.info("finished successfully")
 

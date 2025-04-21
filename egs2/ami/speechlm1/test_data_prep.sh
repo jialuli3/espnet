@@ -1,0 +1,1 @@
+local/data.sh --dataset_dir /ocean/projects/cis210027p/shared/corpora/amicorpus --output_dir data --wav_out_dir data/wav --mic sdm --dur 8 --skip 6 --pit_method arrive --spk_format spk_idx --curr_sets dev --use_extra_info false --frame_res 0.1 --data_outputs diar_tokens

@@ -62,6 +62,7 @@ def main():
     file_triplets = []
     all_triplets_required = task_format.data_triplets
     all_triplets_provided = [e.strip().split(",") for e in args.file_modality_type]
+    print(all_triplets_required, all_triplets_provided)
     for tgt_name, tgt_modality, tgt_type in all_triplets_required:
         triplet_found = False
         for name, modality, _type in all_triplets_provided:

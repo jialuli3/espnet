@@ -21,6 +21,7 @@ MODALITIES["codec_ssl"] = Modality()
 MODALITIES["text_bpe"] = Modality()
 MODALITIES["g2p"] = Modality()
 MODALITIES["spk"] = Modality()
+MODALITIES["diar_tokenizer"] = Modality()
 MODALITIES["class"] = Modality()
 MODALITIES["bool"] = Modality()
 MODALITIES["video_ssl"] = Modality()
@@ -172,6 +173,66 @@ SPEECHLM_TASKS["se"] = SpeechLMTaskTemplate(
 )
 
 # codec_ssl tasks:
+SPEECHLM_TASKS["codec_ssl_sd_event"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("text_arrive_event_dur3_skip3", "text_bpe", "text_arrive_event_dur3_skip3")], # event based model 
+)
+
+SPEECHLM_TASKS["codec_ssl_sd_event_dur30_skip10"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("text_arrive_event_dur30_skip10", "text_bpe", "text_arrive_event_dur30_skip10")], # event based model 
+)
+
+SPEECHLM_TASKS["codec_ssl_sd_event_dur8_skip6"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("text_arrive_event_dur8_skip6", "text_bpe", "text_arrive_event_dur8_skip6")], # event based model 
+)
+
+SPEECHLM_TASKS["codec_ssl_sd_event_random_dur"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("text_arrive_event_dur_30_20_15_8", "text_bpe", "text_arrive_event_dur_30_20_15_8")], # event based model 
+)
+
+SPEECHLM_TASKS["codec_ssl_sd_event_dur8_skip6_diar_model"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_arrive_event_dur8_skip6", "diar_tokenizer", "diar_tokens_arrive_event_dur8_skip6")], # event based model 
+)
+
+SPEECHLM_TASKS["codec_ssl_sd_frame_dur8_skip6_diar_model"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_arrive_frame_dur8_skip6", "diar_tokenizer", "diar_tokens_arrive_frame_dur8_skip6")], # event based model 
+)
+
+SPEECHLM_TASKS["codec_ssl_sd_event_dur8_skip6_special_tokens"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("text_arrive_event_dur8_skip6_special_tokens", "text_bpe", "text_arrive_event_dur8_skip6_special_tokens")], # event based model 
+)
+
+SPEECHLM_TASKS["codec_ssl_sd_frame_dur8_skip6_special_tokens"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("text_arrive_frame_dur8_skip6_special_tokens", "text_bpe", "text_arrive_frame_dur8_skip6_special_tokens")], # event based model 
+)
+
+SPEECHLM_TASKS["codec_ssl_sd_frame_dur8_skip6"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("text_arrive_frame_dur8_skip6", "text_bpe", "text_arrive_frame_dur8_skip6")], # event based model 
+)
+
+SPEECHLM_TASKS["codec_ssl_sd_event_dur3_skip1"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("text_arrive_event_dur3_skip1", "text_bpe", "text_arrive_event_dur3_skip1")], # event based model 
+)
+
+SPEECHLM_TASKS["codec_ssl_sd_event_dur30_skip10_spk_id"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("text_arrive_event_dur30_skip10_spk_id", "text_bpe", "text_arrive_event_dur30_skip10_spk_id")], # event based model 
+)
+
+SPEECHLM_TASKS["codec_ssl_sd_frame_dur30_skip10"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("text_arrive_frame_dur30_skip10_0.1", "text_bpe", "text_arrive_frame_dur30_skip10_0.1")], # frame based model 
+)
+
 SPEECHLM_TASKS["codec_ssl_asr"] = SpeechLMTaskTemplate(
     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
     targets=[("text", "text_bpe", "text")],
