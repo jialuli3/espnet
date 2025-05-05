@@ -19,7 +19,7 @@ if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
     --train_config "${train_config}" \
     --inference_config "${inference_config}" \
     --audio_format wav \
-    --codec_stage 2 \
+    --codec_stage 100 \
     --codec_choice ESPnet --codec_hf_model_tag ftshijt/espnet_codec_dac_large_v1.4_360epoch \
     --ssl_choice espnet_hubert --ssl_nlayer 18 --ssl_checkpoint_path exp/kmeans/38epoch.pth --ssl_kmeans_path exp/kmeans/xeus_18_5000clusters/km_5000.mdl --ssl_batch_bins 1000000 \
     --subword_choice huggingface --subword_model HuggingFaceTB/SmolLM-1.7B \

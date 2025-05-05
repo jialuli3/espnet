@@ -41,7 +41,7 @@ if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then
     --inference_config "${inference_config}" \
     --audio_format wav \
     --dur 8 --skip 6 \
-    --ngpu 2 \
+    --ngpu 1 \
     --cmd_backend "slurm_train" \
     --nj 1 --inference_nj 1 \
     --stage 8 --stop_stage 8

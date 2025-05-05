@@ -25,4 +25,4 @@ task="codec_ssl_sd_event_dur8_skip6"
   --gpu_inference false \
   --inference_model valid.ce_loss.ave_3best.pth \
   --nj 1 --inference_nj 1 \
-  --stage 10 --stop_stage 10
+  --stage 8 --stop_stage 8
