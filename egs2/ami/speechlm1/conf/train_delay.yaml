@@ -50,5 +50,6 @@ asr_time_mask_config:
 
 # deepspeed
 use_deepspeed: true
-deepspeed_config: conf/deepspeed_ddp_zero1_smollm2.json 
+#deepspeed_config: conf/deepspeed_ddp_zero1_smollm2.json 
+deepspeed_config: conf/deepspeed_ddp_zero1_smollm2_1gpu.json 
 deepspeed_step_sync: false
