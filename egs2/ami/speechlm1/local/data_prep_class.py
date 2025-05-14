@@ -22,6 +22,7 @@ class DiarizationPreprocessor:
         use_random_durs=False,
         frame_res=0.1,
         random_durs=[30, 20, 15, 8],
+        dataset_name="ami",
         ):
         self.dataset_dir = dataset_dir
         self.output_dir = output_dir
@@ -36,6 +37,7 @@ class DiarizationPreprocessor:
         self.text_out_event = None # used to convert to frame based
         self.use_random_durs = use_random_durs
         self.random_durs = random_durs
+        self.dataset_name=dataset_name
 
         # get speaker orders
         self.speak_order_maps={}
@@ -43,18 +45,22 @@ class DiarizationPreprocessor:
         self.file_ids={}
         self.segment_files={}
 
-        for curr_set in curr_sets:
-            self.rttm_files[curr_set] = os.path.join(self.output_dir, curr_set, "rttm")
-            self.segment_files[curr_set]=os.path.join(self.output_dir, curr_set, f"segments_dur{dur}_skip{skip}")
-            if self.use_random_durs:
-                self.segment_files[curr_set]=os.path.join(self.output_dir, curr_set, \
-                    f"segments_random_dur_{self.random_durs[0]}_{self.random_durs[1]}_{self.random_durs[2]}_{self.random_durs[3]}")
-                print(self.segment_files[curr_set])
-            self.file_ids[curr_set]=f"local/split_{curr_set}.orig"
-            self.speak_order_maps[curr_set]=self.get_spk_order(self.rttm_files[curr_set], self.pit_method)
-
-        # np.random.seed(2025)
-
+        if self.dataset_name=="ami":
+            for curr_set in curr_sets:
+                self.rttm_files[curr_set] = os.path.join(self.output_dir, curr_set, "rttm")
+                self.segment_files[curr_set]=os.path.join(self.output_dir, curr_set, f"segments_dur{dur}_skip{skip}")
+                if self.use_random_durs:
+                    self.segment_files[curr_set]=os.path.join(self.output_dir, curr_set, \
+                        f"segments_random_dur_{self.random_durs[0]}_{self.random_durs[1]}_{self.random_durs[2]}_{self.random_durs[3]}")
+                    print(self.segment_files[curr_set])
+                self.file_ids[curr_set]=f"local/split_{curr_set}.orig"
+                self.speak_order_maps[curr_set]=self.get_spk_order(self.rttm_files[curr_set], self.pit_method)
+        else: # librimix
+            for curr_set in curr_sets:
+                self.rttm_files[curr_set] = os.path.join(self.output_dir, curr_set, "rttm")
+                self.segment_files[curr_set]=os.path.join(self.output_dir, curr_set, "segments")
+                self.speak_order_maps[curr_set]=self.get_spk_order(self.rttm_files[curr_set], self.pit_method)
+                
     @staticmethod
     def read_file(file_name):
         with open(file_name, "r") as f:
@@ -220,9 +226,9 @@ class DiarizationPreprocessor:
                 if text_count_dict is not None:
                     sorted_c=dict(sorted(text_count_dict[curr_id][(start,end)].items()))
                     counter_out = str(dict(sorted_c)).replace("'","")
-                    out.append(f"{curr_id}-{int(start)}-{int(end)} {counter_out} {text_out_dict[curr_id][(start,end)]}\n")
+                    out.append(f"{self.segment_id_dict[curr_id][(start,end)]} {counter_out} {text_out_dict[curr_id][(start,end)]}\n")
                 else:           
-                    out.append(f"{curr_id}-{int(start)}-{int(end)} {text_out_dict[curr_id][(start,end)]}\n")
+                    out.append(f"{self.segment_id_dict[curr_id][(start,end)]} {text_out_dict[curr_id][(start,end)]}\n")
         return out
 
     def prep_event(self, curr_set, output_format):
@@ -240,17 +246,21 @@ class DiarizationPreprocessor:
         text_out_event = {}
         text_out_event_count = {}
         text_out_frame = {}
+        self.segment_id_dict = {}
 
         for row in segment_rows:
             parts = row.strip().split()
+            segment_id = parts[0]
             curr_id = parts[1]
             start = float(parts[2])
             end = float(parts[3])
             if curr_id not in text_out_event:
                 text_out_event[curr_id]={} # initialize the output dictionary with start,end stamps
                 text_out_event_count[curr_id]={}
+                self.segment_id_dict[curr_id]={}
             text_out_event[curr_id][(start,end)]=""
             text_out_event_count[curr_id][(start,end)]=Counter({f"<spk{key}>": 0 for key in range(1, len(speak_order_map[curr_id])+1)})
+            self.segment_id_dict[curr_id][(start,end)]=segment_id
 
         for row in rttm_rows:
             parts = row.strip().split()
@@ -278,11 +288,12 @@ class DiarizationPreprocessor:
                         assert self.spk_format=="spk_idx"
                         text_out_event[curr_id][(start,end)]+=f"<spk{spk_id}> <bot> <{offset_start}> <{offset_end}> <eot> "
 
-
-        time_info = "_".join(segment_file.split("_")[-2:])
-        if self.use_random_durs:
-            time_info = "_".join(segment_file.split("_")[-5:])
-        out_file_event_name=f"{output_format}_{self.pit_method}_event_{time_info}"
+        out_file_event_name=f"{output_format}_{self.pit_method}_event"
+        if self.dataset_name=="ami":
+            time_info = "_".join(segment_file.split("_")[-2:])
+            if self.use_random_durs:
+                time_info = "_".join(segment_file.split("_")[-5:])
+            out_file_event_name+=f"_{time_info}"
 
         if self.spk_format!="spk_idx":
             out_file_event_name+=f"_{self.spk_format}"
@@ -379,11 +390,12 @@ class DiarizationPreprocessor:
 
                 text_out_frame[curr_id][(start,end)]=out_string
     
-        time_info = "_".join(segment_file.split("_")[-2:])
-        if self.use_random_durs:
-            time_info = "_".join(segment_file.split("_")[-5:])
-        out_file_frame_name=f"{output_format}_{self.pit_method}_frame_{time_info}"
-
+        out_file_frame_name=f"{output_format}_{self.pit_method}_frame"
+        if self.dataset_name=="ami":
+            time_info = "_".join(segment_file.split("_")[-2:])
+            if self.use_random_durs:
+                time_info = "_".join(segment_file.split("_")[-5:])
+            out_file_frame_name+=f"_{time_info}"
 
         if self.spk_format!="spk_idx":
             out_file_frame_name+=f"_{self.spk_format}"
@@ -395,11 +407,10 @@ class DiarizationPreprocessor:
         self.write_file(text_frame_out, out_text_frame_path)
         print(f"write frame file to {out_text_frame_path}")
 
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Prepare diarization wav.scp and segments files")
-    parser.add_argument("--dataset_dir", type=str, required=True, help="Path to AMI dataset root")
+    parser.add_argument("--dataset_dir", type=str, required=True, help="Path to dataset root")
+    parser.add_argument("--dataset_name", type=str, required=True, help="Dataset name")
     parser.add_argument("--output_dir", type=str, required=True, help="Output directory for Kaldi files")
     parser.add_argument("--wav_out_dir", type=str, required=True, help="Directory to save single-channel wav files")
     parser.add_argument("--mic", type=str, default="sdm", choices=["sdm", "ihm"], help="Microphone type")
@@ -417,6 +428,7 @@ if __name__ == "__main__":
 
     processor = DiarizationPreprocessor(
         dataset_dir=args.dataset_dir,
+        dataset_name=args.dataset_name,
         output_dir=args.output_dir,
         wav_out_dir=args.wav_out_dir,
         mic=args.mic,

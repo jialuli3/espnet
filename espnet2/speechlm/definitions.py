@@ -198,6 +198,11 @@ SPEECHLM_TASKS["codec_ssl_sd_event_dur8_skip6_diar_model"] = SpeechLMTaskTemplat
     targets=[("diar_tokens_arrive_event_dur8_skip6", "diar_tokenizer", "diar_tokens_arrive_event_dur8_skip6")], # event based model 
 )
 
+SPEECHLM_TASKS["codec_ssl_sd_event_librimix_diar_model"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_arrive_event", "diar_tokenizer", "diar_tokens_arrive_event")], # event based model 
+)
+
 SPEECHLM_TASKS["codec_ssl_sd_frame_dur8_skip6_diar_model"] = SpeechLMTaskTemplate(
     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
     targets=[("diar_tokens_arrive_frame_dur8_skip6", "diar_tokenizer", "diar_tokens_arrive_frame_dur8_skip6")], # event based model 

@@ -26,6 +26,7 @@ min() {
 SECONDS=0
 
 dataset_dir="/ocean/projects/cis210027p/shared/corpora/amicorpus"
+dataset_name="ami"
 output_dir="data"
 wav_out_dir="${output_dir}/wav"
 pit_method="arrive" # can be arrive or most time ordered
@@ -58,6 +59,7 @@ fi
 
 python local/data_prep_class.py \
   --dataset_dir "${dataset_dir}" \
+  --dataset_name "${dataset_name}" \
   --output_dir "${output_dir}" \
   --wav_out_dir "${wav_out_dir}" \
   --mic "${mic}" \
