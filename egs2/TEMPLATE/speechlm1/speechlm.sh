@@ -48,9 +48,9 @@ python=python3       # Specify python to execute espnet commands.
 local_data_opts=""  # Options to be passed to local/data.sh.
 data_name=""        # The name of current dataset to prepare
 task=               # when task is multi_task, skip data preparation and use train/valid jsons
-dataset_dir="/ocean/projects/cis210027p/shared/corpora/amicorpus"
-output_dir="data"
-wav_out_dir="${output_dir}/wav"
+dataset_dir="/scratch/bdxc/jialuli3/ami/amicorpus"
+data_dir="data"
+wav_out_dir="${data_dir}/wav"
 pit_method="arrive" # can be arrive or most time ordered
 output_format="event" # can be event or frame-based
 dur=3 # duration of each audio file
@@ -113,9 +113,9 @@ dsets=
 
 
 # Evaluation related
-ref_rttm_file=data/${test_sets}/rttm
-uem_file=data/${test_sets}/all.uem
-test_wav_scp=data/${test_sets}/wav.scp
+ref_rttm_file=${data_dir}/${test_sets}/rttm
+uem_file=${data_dir}/${test_sets}/all.uem
+test_wav_scp=${data_dir}/${test_sets}/wav.scp
 apply_clustering=false
 skip_interval=1
 
@@ -242,7 +242,7 @@ else
 fi
 
 if [ -z ${token_list_dir} ]; then
-    token_list_dir=data/token_list/${data_combo_name}
+    token_list_dir=${data_dir}/token_list/${data_combo_name}
 fi
 
 # check for stage 8-9: training and inference
@@ -294,11 +294,14 @@ if ! "${skip_data_prep}"; then
             _dsets=("${train_set} ${valid_set} ${test_sets}")
         fi
 
+        log "data_outputs ${data_outputs}"
+
         for dset in ${_dsets}; do
             for data_output in ${data_outputs}; do
                 local/data.sh \
                     --dataset_dir "${dataset_dir}" \
-                    --output_dir "${output_dir}" \
+                    --dataset_name "${data_name}" \
+                    --output_dir "${data_dir}" \
                     --wav_out_dir "${wav_out_dir}" \
                     --mic "${mic}" \
                     --dur "${dur}" \
@@ -328,8 +331,7 @@ if ! "${skip_data_prep}"; then
         if ${skip_train}; then
             _dsets=${test_sets}
         else
-            #_dsets="${train_set} ${valid_set} ${test_sets}"
-            _dsets="${valid_set}"
+            _dsets="${train_set} ${valid_set} ${test_sets}"
         fi
 
         for dset in ${_dsets}; do
@@ -342,22 +344,29 @@ if ! "${skip_data_prep}"; then
                 if [ ${_modality} == "codec" ] || [ ${_modality} == "ssl" ] || [ ${_modality} == "codec_ssl" ]; then
                     # Format audio
                     _opts=
-                    if ${use_random_durs}; then
-                        log "data/"${dset}"/segments_random_dur_30_20_15_8"
-                        if [ -e data/"${dset}"/segments_random_dur_30_20_15_8 ]; then
-                            _opts+="--segments data/${dset}/segments_random_dur_30_20_15_8 "
-                        fi
-                    else
-                        log "data/"${dset}"/segments_dur${dur}_skip${skip}"
-                        if [ -e data/"${dset}"/segments_dur${dur}_skip${skip} ]; then
-                            _opts+="--segments data/${dset}/segments_dur${dur}_skip${skip} "
+                    if [ ${data_name} == "ami" ]; then
+                        if ${use_random_durs}; then
+                            log "${data_dir}/"${dset}"/segments_random_dur_30_20_15_8"
+                            if [ -e data/"${dset}"/segments_random_dur_30_20_15_8 ]; then
+                                _opts+="--segments ${data_dir}/${dset}/segments_random_dur_30_20_15_8 "
+                            fi
+                        else
+                            log "${data_dir}/"${dset}"/segments_dur${dur}_skip${skip}"
+                            if [ -e data/"${dset}"/segments_dur${dur}_skip${skip} ]; then
+                                _opts+="--segments ${data_dir}/${dset}/segments_dur${dur}_skip${skip} "
+                            fi
                         fi
                     fi
                     
+                    if [ ${data_name} == "librimix" ]; then
+                        log "${data_dir}/"${dset}"/segments"
+                        _opts+="--segments ${data_dir}/${dset}/segments "
+                    fi
+
                     scripts/audio/format_wav_scp.sh --nj "${nj}" --cmd "${train_cmd}" \
                     --audio-format "${audio_format}" --fs "${fs}" \
                     --out_filename ${_name} ${_opts} \
-                    "data/${dset}/${_name}" "${data_audio}/${dset}"
+                    "${data_dir}/${dset}/${_name}" "${data_audio}/${dset}"
 
                     # Filter Length
                     if [[ ! " ${dset} " =~ " ${test_sets} " ]]; then
@@ -371,8 +380,8 @@ if ! "${skip_data_prep}"; then
 
                 else
                     # Other non-speech items
-                    log "data/${dset}/${_name}"
-                    <"data/${dset}/${_name}" \
+                    log "${data_dir}/${dset}/${_name}"
+                    <"${data_dir}/${dset}/${_name}" \
                     awk ' { if( NF != 1 ) print $0; } ' >"${data_audio}/${dset}/${_name}"
                 fi
             done
@@ -388,8 +397,7 @@ if ! "${skip_data_prep}"; then
         if ${skip_train}; then
             _dsets="${test_sets}"
         else
-            #_dsets="${train_set} ${valid_set} ${test_sets}"
-            _dsets="${train_set}"
+            _dsets="${train_set} ${valid_set} ${test_sets}"
         fi
         
         # Parse the data preparation operations from Python task definition.
