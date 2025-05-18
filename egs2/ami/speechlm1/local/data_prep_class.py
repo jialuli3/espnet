@@ -44,7 +44,8 @@ class DiarizationPreprocessor:
         self.rttm_files={}
         self.file_ids={}
         self.segment_files={}
-
+        self.reco2dur={}
+        
         if self.dataset_name=="ami":
             for curr_set in curr_sets:
                 self.rttm_files[curr_set] = os.path.join(self.output_dir, curr_set, "rttm")
@@ -57,10 +58,10 @@ class DiarizationPreprocessor:
                 self.speak_order_maps[curr_set]=self.get_spk_order(self.rttm_files[curr_set], self.pit_method)
         else: # librimix
             for curr_set in curr_sets:
-                self.rttm_files[curr_set] = os.path.join(self.output_dir, curr_set, "rttm")
-                self.segment_files[curr_set]=os.path.join(self.output_dir, curr_set, "segments")
+                self.rttm_files[curr_set] = os.path.join(self.output_dir, curr_set, "sorted.rttm")
                 self.speak_order_maps[curr_set]=self.get_spk_order(self.rttm_files[curr_set], self.pit_method)
-                
+                self.reco2dur[curr_set] = os.path.join(self.output_dir, curr_set, "reco2dur")
+    
     @staticmethod
     def read_file(file_name):
         with open(file_name, "r") as f:
@@ -155,7 +156,6 @@ class DiarizationPreprocessor:
             self.write_file(out, output_path)
         self.write_file(out_segments, output_segment_path)
 
-
     def prep_random_wav_scp(self, curr_set):
         os.makedirs(os.path.join(self.output_dir, curr_set), exist_ok=True)
         os.makedirs(self.wav_out_dir, exist_ok=True)
@@ -229,6 +229,22 @@ class DiarizationPreprocessor:
                     out.append(f"{self.segment_id_dict[curr_id][(start,end)]} {counter_out} {text_out_dict[curr_id][(start,end)]}\n")
                 else:           
                     out.append(f"{self.segment_id_dict[curr_id][(start,end)]} {text_out_dict[curr_id][(start,end)]}\n")
+        return out
+
+    def get_text_out_librimix(self, text_out_dict, text_count_dict=None, format_type="event", output_format="text"):
+        out=[]
+        for curr_id in text_out_dict:
+            if text_out_dict[curr_id]=="" and format_type=="event":
+                if output_format=="text":
+                    text_out_dict[curr_id]="<space>"
+                else: # diarization tokens
+                    text_out_dict[curr_id]="<sil>"
+            if text_count_dict is not None:
+                sorted_c=dict(sorted(text_count_dict[curr_id].items()))
+                counter_out = str(dict(sorted_c)).replace("'","")
+                out.append(f"{curr_id} {counter_out} {text_out_dict[curr_id]}\n")
+            else:           
+                out.append(f"{curr_id} {text_out_dict[curr_id]}\n")
         return out
 
     def prep_event(self, curr_set, output_format):
@@ -407,6 +423,145 @@ class DiarizationPreprocessor:
         self.write_file(text_frame_out, out_text_frame_path)
         print(f"write frame file to {out_text_frame_path}")
 
+    def prep_event_librimix(self, curr_set, output_format):
+        rttm_rows = self.read_file(self.rttm_files[curr_set])
+        speak_order_map = self.speak_order_maps[curr_set]
+
+        # initialization of dictionary
+        text_out_event = {}
+        text_out_event_count = {}
+
+        for row in rttm_rows:
+            parts = row.strip().split()
+            curr_id = parts[1]
+            rttm_start = round(float(parts[-7]),1)
+            dur = float(parts[-6])
+            rttm_end = round(rttm_start + dur, 1)
+            curr_spk = parts[-3]
+            spk_id = speak_order_map[curr_id][curr_spk]
+
+            if curr_id not in text_out_event:
+                text_out_event[curr_id] = ""
+
+            if output_format=="text":
+                if self.spk_format=="spk_idx":
+                    text_out_event[curr_id]+="{"+f"<spk{spk_id}> ({rttm_start}, {rttm_end})"+"} "
+                else:
+                    text_out_event[curr_id]+="{"+f"<{curr_spk}> ({rttm_start}, {rttm_end})"+"} "
+            else: # output_format diar_tokens
+                assert self.spk_format=="spk_idx"
+                text_out_event[curr_id]+=f"<spk{spk_id}> <bot> <{rttm_start}> <{rttm_end}> <eot> "
+
+        out_file_event_name=f"{output_format}_{self.pit_method}_event"
+
+        if self.spk_format!="spk_idx":
+            out_file_event_name+=f"_{self.spk_format}"
+        if self.use_extra_info:
+            out_file_event_name+=f"_extra_info"
+
+        out_text_event_path=os.path.join(self.output_dir, curr_set, out_file_event_name)
+
+        if self.use_extra_info:
+            text_event_out = self.get_text_out_librimix(text_out_event, text_count_dict=text_out_event_count, format_type="event", output_format=output_format)
+        else:
+            text_event_out = self.get_text_out_librimix(text_out_event, format_type="event", output_format=output_format)
+
+        self.write_file(text_event_out, out_text_event_path)
+        print(f"write event file to {out_text_event_path}")
+        self.text_out_event = text_out_event
+
+    def prep_frame_librimix(self, curr_set, output_format):
+        # convert event-based to frame-based model
+        speak_order_map = self.speak_order_maps[curr_set]
+        text_out_frame={}
+        dur_file = self.read_file(self.reco2dur[curr_set])
+        dur_dict = {}
+        for row in dur_file:
+            row=row.strip()
+            dur_dict[row.split(" ")[0]]=float(row.split(" ")[1])
+
+        for curr_id in self.text_out_event:
+            text_out_frame[curr_id]={}
+            dur = dur_dict[curr_id]
+            frame_mat = np.zeros((len(speak_order_map[curr_id]), round(dur/self.frame_res)))
+                
+            if output_format == "text":
+                all_events = re.findall((r'(<spk\d>.\(\d+\.\d+, \d+\.\d+\))'), self.text_out_event[curr_id])
+                for curr_event in all_events:
+                    parts=curr_event.split()
+                    spk_id = int(parts[0][4])
+                    curr_start = float(parts[1].strip("(").strip(","))
+                    curr_end = float(parts[2].strip(")"))
+
+                    curr_start_idx = round(curr_start/self.frame_res)
+                    curr_end_idx = round(curr_end/self.frame_res)
+                    frame_mat[spk_id-1][curr_start_idx:curr_end_idx]=1
+                
+                frame_idx=frame_mat[0,:]
+                for i in range(1,len(speak_order_map[curr_id])):
+                    frame_idx +=(2**i)*(frame_mat[i,:])
+                frame_idx = np.array(frame_idx, dtype=int)
+                out_string=" ".join(map(str, frame_idx.ravel()))+" "
+
+                if self.use_extra_info: # add special tokens for transitions
+                    out_string=""
+                    prev_spk = frame_idx[0]
+                    if prev_spk>0:
+                        out_string+=f"<speech> {frame_idx[0]} "
+                    for i in range(1,len(frame_idx)):
+                        if prev_spk!=frame_idx[i]: # when speaker changes                            
+                            if prev_spk==0 or frame_idx[i]==0: # change back to silence
+                                out_string+="<speech> "
+                            if prev_spk>0 and frame_idx[i]>0:
+                                out_string+="<sc> "
+                            if frame_idx[i]>len(frame_mat)+1: # frame_idx[i]>len(frame_mat)+1:
+                                out_string+="<overlap> "
+
+                        out_string+=str(frame_idx[i])+" "
+                        prev_spk=frame_idx[i]
+            else: # diar tokens
+                all_events = re.findall((r'(<spk\d> <bot> <\d+\.\d+> <\d+\.\d+> <eot>)'), self.text_out_event[curr_id])
+                for curr_event in all_events:
+                    parts = curr_event.split()
+                    spk_id = int(parts[0][4])
+                    curr_start = float(parts[2].strip("<").strip(">"))
+                    curr_end = float(parts[3].strip("<").strip(">"))
+
+                    curr_start_idx = round(curr_start/self.frame_res)
+                    curr_end_idx = round(curr_end/self.frame_res)
+                    frame_mat[spk_id-1][curr_start_idx:curr_end_idx]=1
+                
+                frame_idx=frame_mat[0,:]
+                out_string=""
+                for i in range(frame_mat.shape[1]):
+                    curr_active_spks=[]
+                    for j in range(len(speak_order_map[curr_id])):
+                        if frame_mat[j][i]==1:
+                            curr_active_spks.append(j+1)
+                    if len(curr_active_spks)==0: # silence
+                        out_string+="<sil> "
+                    elif len(curr_active_spks)==1:
+                        out_string+=f"<spk{curr_active_spks[0]}> "
+                    elif len(curr_active_spks)<=3:
+                        spk_list = "_".join(str(s) for s in curr_active_spks)
+                        out_string += f"<overlap_spk_{spk_list}> "
+                    else:
+                        out_string+="<overlap> "
+
+            text_out_frame[curr_id]=out_string
+
+        out_file_frame_name=f"{output_format}_{self.pit_method}_frame"
+
+        if self.spk_format!="spk_idx":
+            out_file_frame_name+=f"_{self.spk_format}"
+        if self.use_extra_info:
+            out_file_frame_name+=f"_extra_info"
+
+        out_text_frame_path=os.path.join(self.output_dir, curr_set, out_file_frame_name)
+        text_frame_out = self.get_text_out_librimix(text_out_frame, format_type="frame", output_format=output_format)
+        self.write_file(text_frame_out, out_text_frame_path)
+        print(f"write frame file to {out_text_frame_path}")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Prepare diarization wav.scp and segments files")
     parser.add_argument("--dataset_dir", type=str, required=True, help="Path to dataset root")
@@ -453,16 +608,17 @@ if __name__ == "__main__":
                 else:
                     processor.prep_wav_scp(curr_set)
 
-            if item == "text":
+            if args.dataset_name == "ami":
                 print("preparing event file")
-                processor.prep_event(curr_set, "text")
+                processor.prep_event(curr_set, item)
                 print("preparing frame file")
-                processor.prep_frame(curr_set, "text")
-            if item == "diar_tokens":
+                processor.prep_frame(curr_set, item)
+            else: # librimix
                 print("preparing event file")
-                processor.prep_event(curr_set, "diar_tokens")
+                processor.prep_event_librimix(curr_set, item)
                 print("preparing frame file")
-                processor.prep_frame(curr_set, "diar_tokens")
+                processor.prep_frame_librimix(curr_set, item)
+
 
 
 
