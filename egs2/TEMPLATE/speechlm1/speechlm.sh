@@ -357,11 +357,6 @@ if ! "${skip_data_prep}"; then
                             fi
                         fi
                     fi
-                    
-                    if [ ${data_name} == "librimix" ]; then
-                        log "${data_dir}/"${dset}"/segments"
-                        _opts+="--segments ${data_dir}/${dset}/segments "
-                    fi
 
                     scripts/audio/format_wav_scp.sh --nj "${nj}" --cmd "${train_cmd}" \
                     --audio-format "${audio_format}" --fs "${fs}" \
@@ -560,6 +555,7 @@ if ! "${skip_data_prep}"; then
                     log "Use diar_tokenizer"
                     log "${data_feats}/${dset}/token_lists/diar_tokenizer_token_list"
                     cp "${diar_token_list}" "${data_feats}/${dset}/token_lists/diar_tokenizer_token_list"
+                    cp ${data_audio}/${dset}/${_name} ${data_feats}/${dset}/${_name}
 
                 else
                     echo "Unsupported modality ${_modality}" && exit 1;
