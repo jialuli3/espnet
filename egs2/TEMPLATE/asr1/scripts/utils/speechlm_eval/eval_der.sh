@@ -39,12 +39,15 @@ output_dir=
 ref_rttm_file=
 uem_file=
 hyp_format=
+tokenizer=
 speaker_order_method=
 collar=0.25
 spk_format=spk_idx
 test_wav_scp=
 apply_clustering=false
+reco2dur=
 
+data_name="ami"
 python=python3
 skip_interval=1
 _opts=
@@ -57,18 +60,20 @@ if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
     
     _scoredir="${output_dir}/scoring"
     _textgrid_dir="${output_dir}/textgrids"
-    _opts+="--skip_interval ${skip_interval} "
 
-    if [ "${skip_interval}" -eq 1 ]; then
+    if [[ "${skip_interval}" -eq 1 && ${data_name} == "ami" ]]; then
         _scoredir+="_overlap"
         _textgrid_dir+="_overlap"
     fi
 
+    if [[ -n "${reco2dur}" ]]; then
+        _opts+="--reco2dur ${reco2dur} "
+    fi
 
     if ${apply_clustering}; then
         _scoredir+="_clustered"
         _textgrid_dir+="_clustered"
-        _opts+="--apply_clustering"
+        _opts+="--apply_clustering "
     fi
 
     mkdir -p "${_scoredir}"
@@ -78,21 +83,28 @@ if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
     gen_text=${gen_dir}/gen_list
 
     log "apply clustering ${apply_clustering}"
-    log "opt ${_opts}"
+    log "opts ${_opts}"
     python scripts/utils/speechlm_eval/make_rttm_class.py \
         --ref_rttm_file ${ref_rttm_file} \
+        --dataset_name ${data_name} \
         --hyp_output_file ${gen_text} \
         --hyp_format ${hyp_format} \
+        --tokenizer ${tokenizer} \
         --scoring_dir ${_scoredir} \
         --speaker_order_method ${speaker_order_method} \
         --textgrid_dir ${_textgrid_dir} \
         --spk_format ${spk_format} \
         --test_wav_scp ${test_wav_scp} \
+        --skip_interval ${skip_interval} \
         ${_opts}
 
         # Scoring
     log "compute DER"
-    spyder ${_scoredir}/ref.rttm ${_scoredir}/hyp.rttm -u ${uem_file} -p -c ${collar} > ${_scoredir}/results
+    if [ ${data_name} == "librimix" ]; then
+        spyder ${_scoredir}/ref.rttm ${_scoredir}/hyp.rttm -p -c ${collar} > ${_scoredir}/results
+    else
+        spyder ${_scoredir}/ref.rttm ${_scoredir}/hyp.rttm -u ${uem_file} -p -c ${collar} > ${_scoredir}/results
+    fi
     log "write to file ${_scoredir}/results"
 fi
 

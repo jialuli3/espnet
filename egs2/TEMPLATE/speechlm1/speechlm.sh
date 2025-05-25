@@ -53,6 +53,7 @@ data_dir="data"
 wav_out_dir="${data_dir}/wav"
 pit_method="arrive" # can be arrive or most time ordered
 output_format="event" # can be event or frame-based
+tokenizer="text_bpe"
 dur=3 # duration of each audio file
 skip=3 # skip duration 
 spk_format="spk_idx"
@@ -110,16 +111,6 @@ valid_set="dev"     # Name of validation set used for monitoring/tuning network 
 test_sets="test"     # Names of test sets. Multiple items (e.g., both dev and eval sets) can be specified.
 dsets=
 
-
-
-# Evaluation related
-ref_rttm_file=${data_dir}/${test_sets}/rttm
-uem_file=${data_dir}/${test_sets}/all.uem
-test_wav_scp=${data_dir}/${test_sets}/wav.scp
-apply_clustering=false
-skip_interval=1
-
-
 # Tokenization related
 # (1) codec
 codec_choice="EnCodec" # codec
@@ -156,7 +147,7 @@ textlm_hf_model_tag=
 textlm_max_words=1000
 
 # (6) Diarization corpus
-diar_token_list="data/diar_corpus/diar_corpus_spk9_dur30"
+diar_token_list="${data_dir}/diar_corpus/diar_corpus_spk9_dur30"
 
 # (100) other general
 nlsyms_txt=none
@@ -292,6 +283,13 @@ if ! "${skip_data_prep}"; then
             _dsets=("${test_sets}")
         else
             _dsets=("${train_set} ${valid_set} ${test_sets}")
+        fi
+
+        if [ ${data_name} == "librimix" ]; then
+            log "sort rttm"
+            for dset in ${_dsets}; do
+                sort -k2,2 -k4,4n ${data_dir}/${dset}/rttm > ${data_dir}/${dset}/sorted.rttm
+            done
         fi
 
         log "data_outputs ${data_outputs}"
@@ -920,33 +918,51 @@ if ! "${skip_eval}"; then
             #     --gpu_inference ${gpu_inference} \
             #     --nbest ${nbest} ${scoring_args}
 
+            # Evaluation related
+            ref_rttm_file=${data_dir}/${test_sets}/rttm
+            uem_file=${data_dir}/${test_sets}/all.uem
+            test_wav_scp=${data_dir}/${test_sets}/wav.scp
+            apply_clustering=false
+            skip_interval=1
+            _opts=
+
+            if [ ${data_name} == "librimix" ]; then
+                ref_rttm_file=${data_dir}/${test_sets}/sorted.rttm
+                _opts+="--reco2dur ${data_dir}/test/reco2dur "
+            fi
+
             if ${apply_clustering}; then
                 log "Evaluation started... log: '${_logdir}/speechlm_evaluation_clustered.*.log'"
                 ${_cmd} --gpu "${_ngpu}" JOB=1:"${inference_nj}" "${_logdir}"/speechlm_evaluation_clustered.JOB.log \
                     ./scripts/utils/speechlm_eval/eval_der.sh \
                         --ref_rttm_file ${ref_rttm_file} \
+                        --data_name ${data_name} \
                         --uem_file ${uem_file} \
                         --gen_dir ${_dir}/eval_cache \
                         --output_dir ${_dir} \
                         --hyp_format ${output_format} \
+                        --tokenizer ${tokenizer} \
                         --speaker_order_method ${pit_method} \
                         --spk_format ${spk_format} \
                         --test_wav_scp ${test_wav_scp} \
                         --apply_clustering ${apply_clustering} \
-                        --skip_interval ${skip_interval} \
+                        --skip_interval ${skip_interval} ${_opts} \
                         || { cat $(grep -l -i error "${_logdir}"/speechlm_evaluation_clustered.*.log) ; exit 1; }
             else 
                 log "Evaluation started..."
                 ./scripts/utils/speechlm_eval/eval_der.sh \
                         --ref_rttm_file ${ref_rttm_file} \
+                        --data_name ${data_name} \
                         --uem_file ${uem_file} \
                         --gen_dir ${_dir}/eval_cache \
                         --output_dir ${_dir} \
                         --hyp_format ${output_format} \
+                        --tokenizer ${tokenizer} \
                         --speaker_order_method ${pit_method} \
                         --spk_format ${spk_format} \
                         --test_wav_scp ${test_wav_scp} \
-                        --skip_interval ${skip_interval} 
+                        --skip_interval ${skip_interval} \
+                        ${_opts} 
             fi
         done
     fi

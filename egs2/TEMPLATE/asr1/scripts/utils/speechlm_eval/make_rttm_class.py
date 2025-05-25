@@ -8,6 +8,7 @@ from scipy.signal import medfilt
 import numpy as np
 from praatio import textgrid
 import pdb
+import sys
 
 
 class DiarizationScorer:
@@ -16,6 +17,7 @@ class DiarizationScorer:
         ref_rttm_file: str,
         hyp_output_file: str,
         hyp_format: str,
+        tokenizer: str,
         scoring_dir: str,
         speaker_order_method: str,
         spk_format: str = "spk_idx",
@@ -28,11 +30,14 @@ class DiarizationScorer:
         segment_skip: float = 0.8,
         test_wav_scp: str = None,
         apply_clustering: bool = False,
-        textgrid_dir: str = None
+        textgrid_dir: str = None,
+        dataset_name: str = "ami",
+        reco2dur: str = None,
     ):
         self.ref_rttm_file = ref_rttm_file
         self.hyp_output_file = hyp_output_file
         self.hyp_format = hyp_format
+        self.tokenizer = tokenizer
         self.output_dir = scoring_dir
         self.textgrid_dir = textgrid_dir
         self.wav_scp_path = test_wav_scp
@@ -47,16 +52,20 @@ class DiarizationScorer:
         self.spk_count_skip = spk_count_skip
         self.segment_dur = segment_dur
         self.segment_skip = segment_skip
+        self.dataset_name = dataset_name
+        self.reco2dur = {}
+        if reco2dur is not None:
+            content = self.read_file(reco2dur)
+            for row in content:
+                self.reco2dur[row.split()[0]]=round(float(row.strip().split()[1]),1)
 
         self.spk_map = self.get_spk_order()
 
-    @staticmethod
-    def read_file(file_path: str) -> List[str]:
+    def read_file(self, file_path: str) -> List[str]:
         with open(file_path, "r") as f:
             return f.readlines()
 
-    @staticmethod
-    def write_file(content: List[str], file_path: str):
+    def write_file(self, content: List[str], file_path: str):
         with open(file_path, "w") as f:
             f.writelines(content)
         f.close()
@@ -88,6 +97,74 @@ class DiarizationScorer:
                 reverse[file_id][idx] = spk
         return reverse
 
+    def get_curr_rttm_output(self, row, file_id, start_offset, end_offset):
+        rttm_out={}
+        if self.hyp_format == "event" and self.tokenizer=="text_bpe":
+            all_events = re.findall((r'(<spk\d>.\(\d+\.\d+, \d+\.\d+\))'), row.strip())
+            for curr_event in all_events:
+                try:
+                    parts = curr_event.split()
+                    spk_idx = int(parts[0][4])
+                    if spk_idx in self.spk_map[file_id]:
+                        curr_start = float(parts[1].strip("(").strip(","))
+                        curr_end = float(parts[2].strip(")"))
+                        start = round(curr_start+start_offset, 2)
+                        end = round(curr_end+start_offset, 2)
+                        if end-start<0.1: continue
+                        rttm_out.setdefault(spk_idx, []).append([start, end])
+                except:
+                    continue
+        elif self.hyp_format == "frame" and self.tokenizer=="text_bpe":
+            max_frame = int(np.ceil((end_offset-start_offset) / self.frame_duration))
+            out = row.strip().split()[1:]
+            for i,s in enumerate(out):
+                out[i]=re.findall((r'(\d+)'), s)[0] # extract numerical numbers only
+            if len(out) < max_frame:
+                pad_zeros = [0] * (max_frame - len(out))
+                out.extend(pad_zeros)
+            out = out[:max_frame]
+            rttm_out[(start_offset,end_offset)]= np.asarray(out, dtype=int)  
+
+        elif self.hyp_format == "event" and self.tokenizer=="diar_tokenizer":
+            all_events = re.findall((r'(<spk\d> <bot> <\d+\.\d+> <\d+\.\d+> <eot>)'), row.strip())
+            for curr_event in all_events:
+                try:
+                    parts = curr_event.split()
+                    parts = [p.strip("<").strip(">") for p in parts]
+                    spk_idx = int(parts[0][3])
+                    if spk_idx in self.spk_map[file_id]:
+                        curr_start = float(parts[2])
+                        curr_end = float(parts[3])
+                        start = round(curr_start+start_offset, 2)
+                        end = round(curr_end+start_offset, 2)
+                        if end-start<0.1: continue
+                        rttm_out.setdefault(spk_idx, []).append([start, end])
+                except:
+                    continue
+
+        else: # self.hyp_format == "frame" and self.tokenizer="diar_tokenizer":
+            max_frame = int(np.ceil((end_offset-start_offset) / self.frame_duration))
+            out = row.strip().split()[1:]
+            bit_coded = []
+            for frame_output in out:
+                frame_output = frame_output.strip("<").strip(">")
+                if frame_output=="sil":
+                    bit_coded.append(0)
+                elif frame_output.startswith("spk"):
+                    spk_id = int(frame_output[-1])
+                    bit_coded.append(1 << (spk_id - 1))
+                elif frame_output.startswith("overlap_spk"): # startswith overlap
+                    spk_ids = frame_output.split("_")[-2:]
+                    spk_ids = [int(i) for i in spk_ids]
+                    bit_coded.append(sum(1 << (i - 1) for i in spk_ids))
+
+            if len(bit_coded) < max_frame:
+                pad_zeros = [0] * (max_frame - len(bit_coded))
+                bit_coded.extend(pad_zeros)
+            bit_coded = bit_coded[:max_frame]
+            rttm_out[(start_offset,end_offset)]= np.asarray(bit_coded, dtype=int)  
+        return rttm_out
+
     def make_hyp_rttm(self):
         content = self.read_file(self.hyp_output_file)
         out_dict = {}
@@ -95,41 +172,19 @@ class DiarizationScorer:
         for row in content:
             try:
                 key = row.strip().split()[0]
-                file_info = key.split("_")[-2]
-                file_id, start_offset = file_info.split("-")[0], float(file_info.split("-")[1])
-                end_offset = float(file_info.split("-")[2])
-                if self.skip_interval is not None and end_offset % self.skip_interval != 0:
-                    continue
+                if self.dataset_name == "ami":
+                    file_info = key.split("_")[-2]
+                    file_id = file_info.split("-")[0]
+                    start_offset, end_offset = float(file_info.split("-")[1]), float(file_info.split("-")[2])
+                    if self.skip_interval is not None and end_offset % self.skip_interval != 0:
+                        continue
+                else: # librimix
+                    file_id = re.findall((r'(\d+-\d+-\d+(?:_\d+-\d+-\d+)+)'), key)[0]
+                    start_offset, end_offset = 0, self.reco2dur[file_id]
             except:
                 continue
-
-            if self.hyp_format == "event":
-                out_dict.setdefault(file_id, {})
-                all_events = re.findall((r'(<spk\d>.\(\d+\.\d+, \d+\.\d+\))'), row.strip())
-                for curr_event in all_events:
-                    try:
-                        parts = curr_event.split()
-                        spk_idx = int(parts[0][4])
-                        if spk_idx in self.spk_map[file_id]:
-                            curr_start = float(parts[1].strip("(").strip(","))
-                            curr_end = float(parts[2].strip(")"))
-                            start = round(curr_start+start_offset, 2)
-                            end = round(curr_end+start_offset, 2)
-                            if end-start<0.1: continue
-                            out_dict[file_id].setdefault(spk_idx, []).append([start, end])
-                    except:
-                        continue
-            elif self.hyp_format == "frame": # convert to event based model
-                out_dict.setdefault(file_id, {})
-                max_frame = int(np.ceil((end_offset-start_offset) / self.frame_duration))
-                out = row.strip().split()[1:]
-                for i,s in enumerate(out):
-                    out[i]=re.findall((r'(\d+)'), s)[0] # extract numerical numbers only
-                if len(out) < max_frame:
-                    pad_zeros = [0] * (max_frame - len(out))
-                    out.extend(pad_zeros)
-                out = out[:max_frame]
-                out_dict[file_id][(start_offset,end_offset)]= np.asarray(out, dtype=int)      
+            curr_rttm = self.get_curr_rttm_output(row, file_id, start_offset, end_offset)
+            out_dict[file_id] = curr_rttm
 
         # apply median filter on frame-based output and generated event-based output
         merged = self.merge_out_dict(out_dict)
@@ -165,11 +220,10 @@ class DiarizationScorer:
                             merged[file_id][spk][-1][1] = max(merged[file_id][spk][-1][1], end)
                         else:
                             merged[file_id][spk].append([start, end])
-        else:
+        else: # frame-based
             for file_id in out_dict:
                 merged.setdefault(file_id, [])
                 sorted_timestamps=sorted(out_dict[file_id].keys())
-                print(sorted_timestamps)
                 prev_timestamp=None
                 for timestamp in sorted_timestamps:
                     if prev_timestamp is None: # first timestamp
@@ -192,11 +246,13 @@ class DiarizationScorer:
             num_frames = int(np.ceil(max_time / self.frame_duration))
             num_spks = len(merged[file_id])
             labels = np.zeros((num_spks, num_frames), dtype=int)
-
+            print(num_spks, num_frames)
+            print(file_id, merged[file_id].keys())
+            
             for spk_id in merged[file_id]:
                 for start, end in merged[file_id][spk_id]:
                     start_idx, end_idx = int(start / self.frame_duration), int(np.ceil(end / self.frame_duration))
-                    labels[spk_id - 1][start_idx:end_idx] = 1
+                    labels[min(spk_id - 1, num_spks-1)][start_idx:end_idx] = 1
 
             index = labels[0, :].copy()
             for i in range(1, num_spks):
@@ -205,6 +261,7 @@ class DiarizationScorer:
         return out_frame
             
     def apply_median_filter(self, frame_mat):
+        # It converts frame-level multi-speaker binary activity indicators into speaker segment timestamps, with median filtering applied to smooth the frame-wise predictions.
         filtered = {}
         for file_id in frame_mat:
             index = frame_mat[file_id]
@@ -294,13 +351,17 @@ class DiarizationScorer:
 
 
 def main():
+    print("Raw sys.argv:", sys.argv)
     parser = argparse.ArgumentParser()
     parser.add_argument("--ref_rttm_file", type=str)
+    parser.add_argument("--dataset_name", type=str)
     parser.add_argument("--hyp_output_file", type=str)
     parser.add_argument("--hyp_format", type=str, choices=["event", "frame"])
+    parser.add_argument("--tokenizer", type=str, choices=["text_bpe", "diar_tokenizer"])
     parser.add_argument("--scoring_dir", type=str)
     parser.add_argument("--textgrid_dir", type=str, default=None)
     parser.add_argument("--test_wav_scp", type=str, default=None)
+    parser.add_argument("--reco2dur", type=str, default=None)
     parser.add_argument("--speaker_order_method", type=str, choices=["arrive", "most"])
     parser.add_argument("--spk_format", type=str, choices=["spk_id", "spk_idx"], default="spk_idx")
     parser.add_argument("--skip_interval", type=int, default=1)
@@ -309,15 +370,18 @@ def main():
 
     scorer = DiarizationScorer(
         ref_rttm_file=args.ref_rttm_file,
+        dataset_name=args.dataset_name,
         hyp_output_file=args.hyp_output_file,
         hyp_format=args.hyp_format,
+        tokenizer=args.tokenizer,
         scoring_dir=args.scoring_dir,
         speaker_order_method=args.speaker_order_method,
         spk_format=args.spk_format,
         skip_interval=args.skip_interval,
         test_wav_scp=args.test_wav_scp,
         apply_clustering=args.apply_clustering,
-        textgrid_dir=args.textgrid_dir
+        textgrid_dir=args.textgrid_dir,
+        reco2dur=args.reco2dur
     )
 
     scorer.make_hyp_rttm()
