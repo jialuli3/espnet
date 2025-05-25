@@ -240,8 +240,15 @@ class DiarizationPreprocessor:
                 else: # diarization tokens
                     text_out_dict[curr_id]="<sil>"
             if text_count_dict is not None:
-                sorted_c=dict(sorted(text_count_dict[curr_id].items()))
-                counter_out = str(dict(sorted_c)).replace("'","")
+                if output_format == "text":
+                    sorted_c=dict(sorted(text_count_dict[curr_id].items()))
+                    counter_out = str(dict(sorted_c)).replace("'","")
+                else: # diar tokens
+                    sorted_c=dict(sorted(text_count_dict[curr_id].items()))
+                    counter_out = "<start_count> "
+                    for spk_idx, count in sorted_c.items():
+                        counter_out+=f"<spk{spk_idx}_count> <{count}_count> "
+                    counter_out += "<end_count>"
                 out.append(f"{curr_id} {counter_out} {text_out_dict[curr_id]}\n")
             else:           
                 out.append(f"{curr_id} {text_out_dict[curr_id]}\n")
@@ -440,18 +447,76 @@ class DiarizationPreprocessor:
             curr_spk = parts[-3]
             spk_id = speak_order_map[curr_id][curr_spk]
 
-            if curr_id not in text_out_event:
-                text_out_event[curr_id] = ""
+            #if curr_id not in text_out_event:
+            text_out_event.setdefault(curr_id, "")
+            text_out_event_count.setdefault(curr_id, Counter())
 
             if output_format=="text":
                 if self.spk_format=="spk_idx":
                     text_out_event[curr_id]+="{"+f"<spk{spk_id}> ({rttm_start}, {rttm_end})"+"} "
+                    text_out_event_count[curr_id][spk_id]+=1
                 else:
                     text_out_event[curr_id]+="{"+f"<{curr_spk}> ({rttm_start}, {rttm_end})"+"} "
+                    text_out_event_count[curr_id][curr_spk]+=1
             else: # output_format diar_tokens
                 assert self.spk_format=="spk_idx"
                 text_out_event[curr_id]+=f"<spk{spk_id}> <bot> <{rttm_start}> <{rttm_end}> <eot> "
+                text_out_event_count[curr_id][spk_id]+=1
+        
+        out_file_event_name=f"{output_format}_{self.pit_method}_event"
 
+        if self.spk_format!="spk_idx":
+            out_file_event_name+=f"_{self.spk_format}"
+        if self.use_extra_info:
+            out_file_event_name+=f"_extra_info"
+
+        out_text_event_path=os.path.join(self.output_dir, curr_set, out_file_event_name)
+
+        if self.use_extra_info:
+            text_event_out = self.get_text_out_librimix(text_out_event, text_count_dict=text_out_event_count, format_type="event", output_format=output_format)
+        else:
+            text_event_out = self.get_text_out_librimix(text_out_event, format_type="event", output_format=output_format)
+
+        self.write_file(text_event_out, out_text_event_path)
+        print(f"write event file to {out_text_event_path}")
+        self.text_out_event = text_out_event
+
+   def prep_event_overlap_librimix(self, curr_set, output_format):
+        rttm_rows = self.read_file(self.rttm_files[curr_set])
+        speak_order_map = self.speak_order_maps[curr_set]
+
+        # initialization of dictionary
+        text_out_event = {}
+        text_out_event_count = {}
+
+        for row in rttm_rows:
+            parts = row.strip().split()
+            curr_id = parts[1]
+            rttm_start = round(float(parts[-7]),1)
+            dur = float(parts[-6])
+            rttm_end = round(rttm_start + dur, 1)
+            curr_spk = parts[-3]
+            spk_id = speak_order_map[curr_id][curr_spk]
+
+            #if curr_id not in text_out_event:
+            text_out_event.setdefault(curr_id, [])
+            text_out_event_count.setdefault(curr_id, Counter())
+
+            text_out_event[curr_id].append((rttm_start, rttm_end, spk_id))
+            text_out_event_count[curr_id][spk_id]+=1
+
+        if output_format=="text":
+            if self.spk_format=="spk_idx":
+                text_out_event[curr_id]+="{"+f"<spk{spk_id}> ({rttm_start}, {rttm_end})"+"} "
+                text_out_event_count[curr_id][spk_id]+=1
+            else:
+                text_out_event[curr_id]+="{"+f"<{curr_spk}> ({rttm_start}, {rttm_end})"+"} "
+                text_out_event_count[curr_id][curr_spk]+=1
+        else: # output_format diar_tokens
+            assert self.spk_format=="spk_idx"
+            text_out_event[curr_id]+=f"<spk{spk_id}> <bot> <{rttm_start}> <{rttm_end}> <eot> "
+            text_out_event_count[curr_id][spk_id]+=1
+    
         out_file_event_name=f"{output_format}_{self.pit_method}_event"
 
         if self.spk_format!="spk_idx":
@@ -533,21 +598,46 @@ class DiarizationPreprocessor:
                 
                 frame_idx=frame_mat[0,:]
                 out_string=""
+                prev_token, curr_token = None, None
                 for i in range(frame_mat.shape[1]):
                     curr_active_spks=[]
                     for j in range(len(speak_order_map[curr_id])):
                         if frame_mat[j][i]==1:
                             curr_active_spks.append(j+1)
                     if len(curr_active_spks)==0: # silence
-                        out_string+="<sil> "
+                        curr_token = "<sil>"
                     elif len(curr_active_spks)==1:
-                        out_string+=f"<spk{curr_active_spks[0]}> "
+                        curr_token = f"<spk{curr_active_spks[0]}>"
                     elif len(curr_active_spks)<=3:
                         spk_list = "_".join(str(s) for s in curr_active_spks)
-                        out_string += f"<overlap_spk_{spk_list}> "
+                        curr_token = f"<overlap_spk_{spk_list}>"
                     else:
-                        out_string+="<overlap> "
+                        curr_token = "<overlap>" # 4 or more
 
+                    if self.use_extra_info: 
+                        if prev_token != curr_token and prev_token is not None:
+                            prev_num_spks = len(prev_active_spks)
+                            curr_num_spks = len(curr_active_spks)
+                            if prev_num_spks == 1:
+                                out_string += "<sc_end> "
+                            elif prev_num_spks == 2 or prev_num_spks == 3:
+                                out_string += f"<overlap_sc_end_{prev_num_spks}> "
+                            elif prev_num_spks > 3:
+                                out_string += f"<overlap_sc_end> "
+
+                            if curr_num_spks == 1:
+                                out_string += "<sc_start> "
+                            elif curr_num_spks == 2 or curr_num_spks == 3:
+                                out_string += f"<overlap_sc_start_{curr_num_spks}> "
+                            elif curr_num_spks > 3:
+                                out_string += f"<overlap_sc_start> "
+
+                        prev_token = curr_token
+                        prev_active_spks = curr_active_spks
+
+                    out_string += curr_token + " "
+                    
+            out_string = out_string[:-1]
             text_out_frame[curr_id]=out_string
 
         out_file_frame_name=f"{output_format}_{self.pit_method}_frame"
