@@ -370,7 +370,13 @@ class SpeechLMTask(AbsTask):
 
         # 2. Build CoreLM module
         corelm_class = corelm_choices.get_class(args.corelm)
-        aux_vocab_size = token_bias["codec"][1] - token_bias["codec"][0] if "codec" in token_bias else 0
+        aux_vocab_size = 0
+        if "codec" in token_bias:
+            if "diar_tokenizer" in token_bias:
+                aux_vocab_size = token_bias["diar_tokenizer"][1] - token_bias["codec"][0]
+            if "diar_tokenizer_multistream" in token_bias:
+                aux_vocab_size = token_bias["diar_tokenizer_multistream"][1] - token_bias["codec"][0]
+        
         corelm = corelm_class(
             transformer=transformer,
             vocab_size=len(token_list),

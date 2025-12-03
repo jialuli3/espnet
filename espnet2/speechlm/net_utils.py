@@ -6,6 +6,7 @@
 from typing import Dict, Optional, Tuple
 
 import torch
+import logging
 
 from espnet2.speechlm.core_lm.abs_core_lm import SpeechLMInferenceOptions
 
@@ -102,7 +103,7 @@ def logits_to_tokens(
     if allow_eos:
         mask = mask.clone()
         mask[:, :, 0, opts.eos] = False
-
+        
     logits.masked_fill_(mask, neg_inf)
 
     # (2) token selection

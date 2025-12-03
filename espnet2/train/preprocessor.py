@@ -2523,7 +2523,6 @@ class SpeechLMPreprocessor(AbsPreprocessor):
         cache = dict(task_name=task_name)
         for idx, data_tuple in enumerate(data_tuples):
             name, modality, role, content, target = data_tuple
-            
             # NOTE(Jinchuan): add an indicator to the end for each target segment.
             # This is for multi-segment inference.
             # end-of-sentence: the last target segment
@@ -2664,7 +2663,7 @@ class SpeechLMPreprocessor(AbsPreprocessor):
             conti_feat = None
 
         # Other discrete modalities
-        elif modality in ["ssl", "text_bpe", "g2p", "video_ssl", "svs_lb", "diar_tokenizer"]:
+        elif modality in ["ssl", "text_bpe", "g2p", "video_ssl", "svs_lb", "diar_tokenizer", "diar_tokenizer_multistream"]:
 
             if modality in ["text_bpe", "g2p"]:
                 if isinstance(value, str):
@@ -2691,21 +2690,37 @@ class SpeechLMPreprocessor(AbsPreprocessor):
                 value = value + self.token_bias[modality][0]
             
             elif modality in ["svs_lb", "diar_tokenizer"]:
-                logging.info(f"Use diar tokenizer, {value}")
+                #logging.info(f"Use diar tokenizer, {value}")
                 value = value.split(" ")  # str to token list, no '\n'
                 value = self.converter.tokens2ids(value)
                 value = np.array(value)  # NOTE(yiwen) don't need to add token bias
-                logging.info(f"Diarized tokens, {value}")
+                #logging.info(f"Diarized tokens, {value}")
 
+            elif modality in ["diar_tokenizer_multistream"]:
+                value = value.split("|")  # separate for each stream
+                value_list = []
+                for v in value:
+                    v_list = v.strip().split(" ")
+                    value_list.append(self.converter.tokens2ids(v_list))
+                value = np.array(value_list)  # NOTE(yiwen) don't need to add token bias
+                #logging.info(f"Diarized tokens before padding, {value}")
             else:
                 raise NotImplementedError
 
-            value = np.pad(
-                np.expand_dims(value, 1),
-                ((0, 0), (0, self.codec_token_in_use - 1)),
-                mode="constant",
-                constant_values=self.pad,
-            )
+            if modality.endswith("multistream"):
+                max_len = max(len(row) for row in value)
+                padded_value = np.full((max_len, self.codec_token_in_use), self.pad, dtype=int)
+                for i, row in enumerate(value):
+                    padded_value[:len(row), i] = row
+                value = padded_value
+                #logging.info(f"Diarized tokens after padding, {value}")
+            else:
+                value = np.pad(
+                    np.expand_dims(value, 1),
+                    ((0, 0), (0, self.codec_token_in_use - 1)),
+                    mode="constant",
+                    constant_values=self.pad,
+                )
 
             conti_feat = None
 
@@ -2726,7 +2741,7 @@ class SpeechLMPreprocessor(AbsPreprocessor):
         value = np.concatenate([modality_idx, value])
         if end_tok is not None:
             end_tok = self.special_token(end_tok)
-            value = np.concatenate([value, end_tok])
+            value = np.concatenate([value, end_tok])        
 
         return value.astype(np.int64), conti_feat
 

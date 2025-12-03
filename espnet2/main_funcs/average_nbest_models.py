@@ -86,6 +86,7 @@ def average_nbest_models(
                                 / f"checkpoint_{e}"
                                 / f"{e}"
                                 / "mp_rank_00_model_states.pt",
+                                #/ "zero_rank_00_model_states.pt",
                                 map_location="cpu",
                                 weights_only=False,
                             )["module"]

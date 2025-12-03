@@ -36,6 +36,10 @@ class SpeechLMCrossEntropyLoss(torch.nn.Module):
         token_bias = token_bias.copy()
         if self.use_aux_ce_loss:
             self.aux_start, self.aux_end = token_bias["codec"]
+            if "diar_tokenizer" in token_bias:
+                self.aux_start, self.aux_end = token_bias["codec"][0], token_bias["diar_tokenizer"][1] 
+            if "diar_tokenizer_multistream" in token_bias:
+                self.aux_start, self.aux_end = token_bias["codec"][0], token_bias["diar_tokenizer_multistream"][1]
         else:
             self.aux_start, self.aux_end = 0, 0
 
@@ -73,7 +77,7 @@ class SpeechLMCrossEntropyLoss(torch.nn.Module):
                 ignore_index=self.pad - self.aux_start,
                 reduction='none'
             )
-    
+
     def forward(
         self, 
         logits: torch.Tensor,
@@ -117,7 +121,7 @@ class SpeechLMCrossEntropyLoss(torch.nn.Module):
                     _targets < self.aux_end,
                 )
             ))
-            
+
             aux_ce_loss = self.apply_ce_loss(
                 aux_logits.flatten(end_dim=2),
                 _targets - self.aux_start,
@@ -178,7 +182,13 @@ class SpeechLMCrossEntropyLoss(torch.nn.Module):
         ce_loss = []
         while start < input.size(0):
             end = min(input.size(0), start + chunk_size)
-            logits = linear_module(input[start: end])
+            logits = linear_module(input[start: end])            
+            # logging.info(f"chunk_size:, {chunk_size}")
+            # logging.info(f"logits.shape:, {logits.shape}")
+            # logging.info(f"target min: {target[start: end].min().item()}")
+            # logging.info(f"target max: {target[start: end].max().item()}")
+            # logging.info(f"vocab_size:, {logits.size(-1)}")
+            
             piece_ce_loss = loss_module(
                 logits,
                 target[start: end],

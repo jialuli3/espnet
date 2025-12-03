@@ -99,7 +99,7 @@ class DistributedOption:
                 backend=self.dist_backend,
                 init_method=self.dist_init_method,
                 world_size=self.dist_world_size,
-                rank=self.dist_rank,
+                rank=self.dist_rank
             )
 
             # About distributed model:

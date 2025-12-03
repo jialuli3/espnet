@@ -22,6 +22,7 @@ MODALITIES["text_bpe"] = Modality()
 MODALITIES["g2p"] = Modality()
 MODALITIES["spk"] = Modality()
 MODALITIES["diar_tokenizer"] = Modality()
+MODALITIES["diar_tokenizer_multistream"] = Modality()
 MODALITIES["class"] = Modality()
 MODALITIES["bool"] = Modality()
 MODALITIES["video_ssl"] = Modality()
@@ -142,153 +143,613 @@ SPEECHLM_TASKS["visual_tts"] = SpeechLMTaskTemplate(
     targets=[("wav.scp", "codec", "kaldi_ark")],
 )
 
-SPEECHLM_TASKS["vc"] = SpeechLMTaskTemplate(
-    conditions=[("src_wav.scp", "codec", "kaldi_ark"), ("utt2spk", "spk", "text")],
-    targets=[("wav.scp", "codec", "kaldi_ark")],
-)
+# SPEECHLM_TASKS["vc"] = SpeechLMTaskTemplate(
+#     conditions=[("src_wav.scp", "codec", "kaldi_ark"), ("utt2spk", "spk", "text")],
+#     targets=[("wav.scp", "codec", "kaldi_ark")],
+# )
 
-SPEECHLM_TASKS["ssl2codec"] = SpeechLMTaskTemplate(
-    conditions=[("ssl_wav.scp", "ssl", "kaldi_ark"), ("utt2spk", "spk", "text")],
-    targets=[("wav.scp", "codec", "kaldi_ark")],
-)
+# SPEECHLM_TASKS["ssl2codec"] = SpeechLMTaskTemplate(
+#     conditions=[("ssl_wav.scp", "ssl", "kaldi_ark"), ("utt2spk", "spk", "text")],
+#     targets=[("wav.scp", "codec", "kaldi_ark")],
+# )
 
-SPEECHLM_TASKS["svs"] = SpeechLMTaskTemplate(
-    conditions=[("label", "svs_lb", "text")],
-    targets=[("wav.scp", "codec", "kaldi_ark")],
-)
+# SPEECHLM_TASKS["svs"] = SpeechLMTaskTemplate(
+#     conditions=[("label", "svs_lb", "text")],
+#     targets=[("wav.scp", "codec", "kaldi_ark")],
+# )
 
-SPEECHLM_TASKS["mt"] = SpeechLMTaskTemplate(
-    conditions=[("src_text", "text_bpe", "text")],
-    targets=[("text", "text_bpe", "text")],
-)
+# SPEECHLM_TASKS["mt"] = SpeechLMTaskTemplate(
+#     conditions=[("src_text", "text_bpe", "text")],
+#     targets=[("text", "text_bpe", "text")],
+# )
 
-SPEECHLM_TASKS["st"] = SpeechLMTaskTemplate(
-    conditions=[("wav.scp", "ssl", "kaldi_ark")],
-    targets=[("src_text", "text_bpe", "text"), ("text", "text_bpe", "text")],
-)
+# SPEECHLM_TASKS["st"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "ssl", "kaldi_ark")],
+#     targets=[("src_text", "text_bpe", "text"), ("text", "text_bpe", "text")],
+# )
 
-SPEECHLM_TASKS["se"] = SpeechLMTaskTemplate(
-    conditions=[("wav.scp", "codec", "kaldi_ark")],
-    targets=[("spk1.scp", "codec", "kaldi_ark")],
-)
+# SPEECHLM_TASKS["se"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec", "kaldi_ark")],
+#     targets=[("spk1.scp", "codec", "kaldi_ark")],
+# )
 
 # codec_ssl tasks:
-SPEECHLM_TASKS["codec_ssl_sd_event"] = SpeechLMTaskTemplate(
+# SPEECHLM_TASKS["codec_ssl_sd_event_ovl_aux_spk_count_dur30_skip10"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_event_ovl_aux_spk_count_dur30_skip10", "diar_tokenizer", "diar_tokens_event_ovl_aux_spk_count_dur30_skip10")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_event_sad_od_ovl_aux_spk_count_dur30_skip10"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_event_sad_od_ovl_aux_spk_count_dur30_skip10", "diar_tokenizer", "diar_tokens_event_sad_od_ovl_aux_spk_count_dur30_skip10")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_event_sad_od_ovl_aux_spk_count_dur30_skip5"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_event_sad_od_ovl_aux_spk_count_dur30_skip5", "diar_tokenizer", "diar_tokens_event_sad_od_ovl_aux_spk_count_dur30_skip5")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_event_sad_od_ovl_aux_spk_count_dur20_skip10"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_event_sad_od_ovl_aux_spk_count_dur20_skip10", "diar_tokenizer", "diar_tokens_event_sad_od_ovl_aux_spk_count_dur20_skip10")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_event_sad_od_ovl_aux_spk_count_dur20_skip5"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_event_sad_od_ovl_aux_spk_count_dur20_skip5", "diar_tokenizer", "diar_tokens_event_sad_od_ovl_aux_spk_count_dur20_skip5")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_event_sad_od_ovl_aux_spk_count_dur10_skip3"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_event_sad_od_ovl_aux_spk_count_dur10_skip3", "diar_tokenizer", "diar_tokens_event_sad_od_ovl_aux_spk_count_dur10_skip3")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_event_sad_od_ovl_aux_spk_count_durf_dur20_skip5"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_event_sad_od_ovl_aux_spk_count_durf_dur20_skip5", "diar_tokenizer", "diar_tokens_event_sad_od_ovl_aux_spk_count_durf_dur20_skip5")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_event_sad_od_ovl_aux_spk_count_local_dur20_skip5"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_event_sad_od_ovl_aux_spk_count_local_dur20_skip5", "diar_tokenizer", "diar_tokens_event_sad_od_ovl_aux_spk_count_local_dur20_skip5")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_event_sad_od_ovl_aux_spk_count_ipu_dur30_skip10"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_event_sad_od_ovl_aux_spk_count_ipu_dur30_skip10", "diar_tokenizer", "diar_tokens_event_sad_od_ovl_aux_spk_count_ipu_dur30_skip10")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_event_ovl_aux_spk_count_random"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_event_ovl_aux_spk_count_random_30_20_10", "diar_tokenizer", "diar_tokens_event_ovl_aux_spk_count_random_30_20_10")], 
+# )
+
+SPEECHLM_TASKS["codec_ssl_sd_frame_sad_multi_subtask_dur30_skip10"] = SpeechLMTaskTemplate(
     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
-    targets=[("text_arrive_event_dur3_skip3", "text_bpe", "text_arrive_event_dur3_skip3")], # event based model 
+    targets=[("diar_tokens_frame_sad_multi_subtask_dur30_skip10", "diar_tokenizer_multistream", "diar_tokens_frame_sad_multi_subtask_dur30_skip10")], 
 )
+
+SPEECHLM_TASKS["codec_ssl_sd_frame_multi_dur30_skip10"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_frame_multi_dur30_skip10", "diar_tokenizer_multistream", "diar_tokens_frame_multi_dur30_skip10")], 
+)
+
+SPEECHLM_TASKS["codec_ssl_sd_frame_sad_multi_dur30_skip10"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_frame_sad_multi_dur30_skip10", "diar_tokenizer_multistream", "diar_tokens_frame_sad_multi_dur30_skip10")], 
+)
+
+SPEECHLM_TASKS["codec_ssl_sd_frame_sc_sad_multi_dur30_skip10"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_frame_sc_sad_multi_dur30_skip10", "diar_tokenizer_multistream", "diar_tokens_frame_sc_sad_multi_dur30_skip10")], 
+)
+
+SPEECHLM_TASKS["codec_ssl_sd_frame_sc_sad_spk_count_multi_subtask_dur30_skip10"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_frame_sc_sad_spk_count_multi_subtask_dur30_skip10", "diar_tokenizer_multistream", "diar_tokens_frame_sc_sad_spk_count_multi_subtask_dur30_skip10")], 
+)
+
+SPEECHLM_TASKS["codec_ssl_sd_frame_sc_spk_count_after_multi_subtask_dur30_skip10"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_frame_sc_spk_count_after_multi_subtask_dur30_skip10", "diar_tokenizer_multistream", "diar_tokens_frame_sc_spk_count_after_multi_subtask_dur30_skip10")], 
+)
+
+# SPEECHLM_TASKS["codec_ssl_sd_frame_sc_sad_od_ovl_aux_spk_count_dur30_skip10"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_frame_sc_sad_od_ovl_aux_spk_count_dur30_skip10", "diar_tokenizer", "diar_tokens_frame_sc_sad_od_ovl_aux_spk_count_dur30_skip10")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_frame_sc_sad_od_ovl_aux_spk_count_dur20_skip5"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_frame_sc_sad_od_ovl_aux_spk_count_dur20_skip5", "diar_tokenizer", "diar_tokens_frame_sc_sad_od_ovl_aux_spk_count_dur20_skip5")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_frame_sc_sad_od_ovl_aux_spk_count_dur10_skip5"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_frame_sc_sad_od_ovl_aux_spk_count_dur10_skip5", "diar_tokenizer", "diar_tokens_frame_sc_sad_od_ovl_aux_spk_count_dur10_skip5")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_frame_sc_sad_od_ovl_aux_spk_count_dur10_skip3"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_frame_sc_sad_od_ovl_aux_spk_count_dur10_skip3", "diar_tokenizer", "diar_tokens_frame_sc_sad_od_ovl_aux_spk_count_dur10_skip3")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_frame_sc_sad_od_ovl_aux_spk_count_time_dur30_skip10"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_frame_sc_sad_od_ovl_aux_spk_count_time_dur30_skip10", "diar_tokenizer", "diar_tokens_frame_sc_sad_od_ovl_aux_spk_count_time_dur30_skip10")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_frame_sc_sad_od_ovl_aux_spk_count_time_dur20_skip10"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_frame_sc_sad_od_ovl_aux_spk_count_time_dur20_skip10", "diar_tokenizer", "diar_tokens_frame_sc_sad_od_ovl_aux_spk_count_time_dur20_skip10")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_frame_sc_sad_od_ovl_aux_spk_count_time_dur20_skip5"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_frame_sc_sad_od_ovl_aux_spk_count_time_dur20_skip5", "diar_tokenizer", "diar_tokens_frame_sc_sad_od_ovl_aux_spk_count_time_dur20_skip5")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_frame_sc_sad_od_ovl_aux_spk_count_multi_subtask_dur30_skip10"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_frame_sc_sad_od_ovl_aux_spk_count_multi_subtask_dur30_skip10", "diar_tokenizer_multistream", "diar_tokens_frame_sc_sad_od_ovl_aux_spk_count_multi_subtask_dur30_skip10")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_frame_sc_ovl_aux_dur30_skip10"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_frame_sc_ovl_aux_dur30_skip10", "diar_tokenizer", "diar_tokens_frame_sc_ovl_aux_dur30_skip10")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_frame_sc_sad_ovl_aux_dur30_skip10"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_frame_sc_sad_ovl_aux_dur30_skip10", "diar_tokenizer", "diar_tokens_frame_sc_sad_ovl_aux_dur30_skip10")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_frame_sc_od_ovl_aux_dur30_skip10"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_frame_sc_od_ovl_aux_dur30_skip10", "diar_tokenizer", "diar_tokens_frame_sc_od_ovl_aux_dur30_skip10")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_frame_sc_ovl_aux_spk_count_dur30_skip10"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_frame_sc_ovl_aux_spk_count_dur30_skip10", "diar_tokenizer", "diar_tokens_frame_sc_ovl_aux_spk_count_dur30_skip10")], 
+# )
 
 SPEECHLM_TASKS["codec_ssl_sd_event_dur30_skip10"] = SpeechLMTaskTemplate(
     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
-    targets=[("text_arrive_event_dur30_skip10", "text_bpe", "text_arrive_event_dur30_skip10")], # event based model 
+    targets=[("diar_tokens_event_dur30_skip10", "diar_tokenizer", "diar_tokens_event_dur30_skip10")], 
 )
 
-SPEECHLM_TASKS["codec_ssl_sd_event_dur8_skip6"] = SpeechLMTaskTemplate(
+SPEECHLM_TASKS["codec_ssl_sd_event_sad_dur30_skip10"] = SpeechLMTaskTemplate(
     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
-    targets=[("text_arrive_event_dur8_skip6", "text_bpe", "text_arrive_event_dur8_skip6")], # event based model 
+    targets=[("diar_tokens_event_sad_dur30_skip10", "diar_tokenizer", "diar_tokens_event_sad_dur30_skip10")], 
 )
 
-SPEECHLM_TASKS["codec_ssl_sd_event_random_dur"] = SpeechLMTaskTemplate(
+SPEECHLM_TASKS["codec_ssl_sd_event_sad_od_dur10_skip10"] = SpeechLMTaskTemplate(
     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
-    targets=[("text_arrive_event_dur_30_20_15_8", "text_bpe", "text_arrive_event_dur_30_20_15_8")], # event based model 
+    targets=[("diar_tokens_event_sad_od_dur10_skip10", "diar_tokenizer", "diar_tokens_event_sad_od_dur10_skip10")], 
 )
 
-SPEECHLM_TASKS["codec_ssl_sd_event_dur8_skip6_diar_model"] = SpeechLMTaskTemplate(
+SPEECHLM_TASKS["codec_ssl_sd_event_sad_od_dur30_skip10"] = SpeechLMTaskTemplate(
     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
-    targets=[("diar_tokens_arrive_event_dur8_skip6", "diar_tokenizer", "diar_tokens_arrive_event_dur8_skip6")], # event based model 
+    targets=[("diar_tokens_event_sad_od_dur30_skip10", "diar_tokenizer", "diar_tokens_event_sad_od_dur30_skip10")], 
 )
 
-SPEECHLM_TASKS["codec_ssl_sd_event_librimix_diar_model"] = SpeechLMTaskTemplate(
+SPEECHLM_TASKS["codec_ssl_sd_event_sad_od_dur60_skip10"] = SpeechLMTaskTemplate(
     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
-    targets=[("diar_tokens_arrive_event", "diar_tokenizer", "diar_tokens_arrive_event")], # event based model 
+    targets=[("diar_tokens_event_sad_od_dur60_skip10", "diar_tokenizer", "diar_tokens_event_sad_od_dur60_skip10")], 
 )
 
-SPEECHLM_TASKS["codec_ssl_sd_frame_dur8_skip6_diar_model"] = SpeechLMTaskTemplate(
+SPEECHLM_TASKS["codec_ssl_sd_event_sad_od_spk_count_after_dur30_skip10"] = SpeechLMTaskTemplate(
     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
-    targets=[("diar_tokens_arrive_frame_dur8_skip6", "diar_tokenizer", "diar_tokens_arrive_frame_dur8_skip6")], # event based model 
+    targets=[("diar_tokens_event_sad_od_spk_count_after_dur30_skip10", "diar_tokenizer", "diar_tokens_event_sad_od_spk_count_after_dur30_skip10")], 
 )
 
-SPEECHLM_TASKS["codec_ssl_sd_event_dur8_skip6_special_tokens"] = SpeechLMTaskTemplate(
+SPEECHLM_TASKS["codec_ssl_sd_event_od_dur30_skip10"] = SpeechLMTaskTemplate(
     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
-    targets=[("text_arrive_event_dur8_skip6_special_tokens", "text_bpe", "text_arrive_event_dur8_skip6_special_tokens")], # event based model 
+    targets=[("diar_tokens_event_od_dur30_skip10", "diar_tokenizer", "diar_tokens_event_od_dur30_skip10")], 
 )
 
-SPEECHLM_TASKS["codec_ssl_sd_frame_dur8_skip6_special_tokens"] = SpeechLMTaskTemplate(
+SPEECHLM_TASKS["codec_ssl_sd_event_od_after_dur30_skip10"] = SpeechLMTaskTemplate(
     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
-    targets=[("text_arrive_frame_dur8_skip6_special_tokens", "text_bpe", "text_arrive_frame_dur8_skip6_special_tokens")], # event based model 
+    targets=[("diar_tokens_event_od_after_dur30_skip10", "diar_tokenizer", "diar_tokens_event_od_after_dur30_skip10")], 
 )
 
-SPEECHLM_TASKS["codec_ssl_sd_frame_dur8_skip6"] = SpeechLMTaskTemplate(
+SPEECHLM_TASKS["codec_ssl_sd_event_sad_od_after_dur30_skip10"] = SpeechLMTaskTemplate(
     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
-    targets=[("text_arrive_frame_dur8_skip6", "text_bpe", "text_arrive_frame_dur8_skip6")], # event based model 
+    targets=[("diar_tokens_event_sad_od_after_dur30_skip10", "diar_tokenizer", "diar_tokens_event_sad_od_after_dur30_skip10")], 
 )
 
-SPEECHLM_TASKS["codec_ssl_sd_event_dur3_skip1"] = SpeechLMTaskTemplate(
+SPEECHLM_TASKS["codec_ssl_sd_event_sad_od_after_spk_count_after_dur30_skip10"] = SpeechLMTaskTemplate(
     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
-    targets=[("text_arrive_event_dur3_skip1", "text_bpe", "text_arrive_event_dur3_skip1")], # event based model 
+    targets=[("diar_tokens_event_sad_od_after_spk_count_after_dur30_skip10", "diar_tokenizer", "diar_tokens_event_sad_od_after_spk_count_after_dur30_skip10")], 
 )
 
-SPEECHLM_TASKS["codec_ssl_sd_event_dur30_skip10_spk_id"] = SpeechLMTaskTemplate(
+SPEECHLM_TASKS["codec_ssl_sd_event_sad_spk_count_after_od_after_dur30_skip10"] = SpeechLMTaskTemplate(
     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
-    targets=[("text_arrive_event_dur30_skip10_spk_id", "text_bpe", "text_arrive_event_dur30_skip10_spk_id")], # event based model 
+    targets=[("diar_tokens_event_sad_spk_count_after_od_after_dur30_skip10", "diar_tokenizer", "diar_tokens_event_sad_spk_count_after_od_after_dur30_skip10")], 
+)
+
+SPEECHLM_TASKS["codec_ssl_sd_event_sad_after_dur30_skip10"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_event_sad_after_dur30_skip10", "diar_tokenizer", "diar_tokens_event_sad_after_dur30_skip10")], 
+)
+
+SPEECHLM_TASKS["codec_ssl_sd_event_od_sad_dur30_skip10"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_event_od_sad_dur30_skip10", "diar_tokenizer", "diar_tokens_event_od_sad_dur30_skip10")], 
+)
+
+SPEECHLM_TASKS["codec_ssl_sd_event_od_sad_spk_count_after_dur30_skip10"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_event_od_sad_spk_count_after_dur30_skip10", "diar_tokenizer", "diar_tokens_event_od_sad_spk_count_after_dur30_skip10")], 
+)
+
+SPEECHLM_TASKS["codec_ssl_sd_event_ovl_dur30_skip10"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_event_ovl_dur30_skip10", "diar_tokenizer", "diar_tokens_event_ovl_dur30_skip10")], 
+)
+
+SPEECHLM_TASKS["codec_ssl_sd_event_spk_count_dur30_skip10"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_event_spk_count_dur30_skip10", "diar_tokenizer", "diar_tokens_event_spk_count_dur30_skip10")], 
+)
+
+SPEECHLM_TASKS["codec_ssl_sd_event_spk_count_after_dur30_skip10"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_event_spk_count_after_dur30_skip10", "diar_tokenizer", "diar_tokens_event_spk_count_after_dur30_skip10")], 
+)
+
+SPEECHLM_TASKS["codec_ssl_sd_event_sad_spk_count_after_dur30_skip10"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_event_sad_spk_count_after_dur30_skip10", "diar_tokenizer", "diar_tokens_event_sad_spk_count_after_dur30_skip10")], 
+)
+
+SPEECHLM_TASKS["codec_ssl_sd_event_sad_ovl_dur30_skip10"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_event_sad_ovl_dur30_skip10", "diar_tokenizer", "diar_tokens_event_sad_ovl_dur30_skip10")], 
 )
 
 SPEECHLM_TASKS["codec_ssl_sd_frame_dur30_skip10"] = SpeechLMTaskTemplate(
     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
-    targets=[("text_arrive_frame_dur30_skip10_0.1", "text_bpe", "text_arrive_frame_dur30_skip10_0.1")], # frame based model 
+    targets=[("diar_tokens_frame_dur30_skip10", "diar_tokenizer", "diar_tokens_frame_dur30_skip10")], 
 )
 
-SPEECHLM_TASKS["codec_ssl_asr"] = SpeechLMTaskTemplate(
+SPEECHLM_TASKS["codec_ssl_sd_frame_sc_dur30_skip10"] = SpeechLMTaskTemplate(
     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
-    targets=[("text", "text_bpe", "text")],
+    targets=[("diar_tokens_frame_sc_dur30_skip10", "diar_tokenizer", "diar_tokens_frame_sc_dur30_skip10")], 
 )
 
-SPEECHLM_TASKS["codec_ssl_tts"] = SpeechLMTaskTemplate(
-    conditions=[("text", "text_bpe", "text"), ("utt2spk", "spk", "text")],
-    targets=[("wav.scp", "codec_ssl", "kaldi_ark")],
-)
-
-SPEECHLM_TASKS["codec_ssl_plain_tts"] = SpeechLMTaskTemplate(
-    conditions=[("text", "text_bpe", "text")],
-    targets=[("wav.scp", "codec_ssl", "kaldi_ark")],
-)
-
-SPEECHLM_TASKS["codec_ssl_audiolm"] = SpeechLMTaskTemplate(
-    conditions=[],
-    targets=[("wav.scp", "codec_ssl", "kaldi_ark")],
-)
-
-SPEECHLM_TASKS["codec_ssl_se"] = SpeechLMTaskTemplate(
-    conditions=[("mix.scp", "codec_ssl", "kaldi_ark")],
-    targets=[("wav.scp", "codec_ssl", "kaldi_ark")],
-    fixed_length_key="mix.scp",
-)
-
-SPEECHLM_TASKS["codec_ssl_tse"] = SpeechLMTaskTemplate(
-    conditions=[("mix.scp", "codec_ssl", "kaldi_ark"), ("utt2spk", "spk", "text")],
-    targets=[("wav.scp", "codec_ssl", "kaldi_ark")],
-    fixed_length_key="mix.scp",
-)
-
-SPEECHLM_TASKS["aac_codecssl"] = SpeechLMTaskTemplate(
+SPEECHLM_TASKS["codec_ssl_sd_frame_sc_sad_dur30_skip10"] = SpeechLMTaskTemplate(
     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
-    targets=[("text", "text_bpe", "text")],
+    targets=[("diar_tokens_frame_sc_sad_dur30_skip10", "diar_tokenizer", "diar_tokens_frame_sc_sad_dur30_skip10")], 
 )
 
-SPEECHLM_TASKS["ag_codecssl"] = SpeechLMTaskTemplate(
-    conditions=[("text", "text_bpe", "text")],
-    targets=[("wav.scp", "codec_ssl", "kaldi_ark")],
+SPEECHLM_TASKS["codec_ssl_sd_frame_sc_sad_od_multi_subtask_dur30_skip10"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_frame_sc_sad_od_multi_subtask_dur30_skip10", "diar_tokenizer_multistream", "diar_tokens_frame_sc_sad_od_multi_subtask_dur30_skip10")], 
 )
 
-SPEECHLM_TASKS["text_dialogue"] = SpeechLMTaskTemplate(
-    conditions=[],
-    targets=[("dialogue", "dialogue", "dialogue_json")],
+SPEECHLM_TASKS["codec_ssl_sd_frame_sc_sad_multi_subtask_dur30_skip10"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_frame_sc_sad_multi_subtask_dur30_skip10", "diar_tokenizer_multistream", "diar_tokens_frame_sc_sad_multi_subtask_dur30_skip10")], 
 )
 
-SPEECHLM_TASKS["audio_dialogue"] = SpeechLMTaskTemplate(
-    conditions=[],
-    targets=[("dialogue", "dialogue", "dialogue_json")],
+SPEECHLM_TASKS["codec_ssl_sd_frame_sc_sad_od_spk_count_multi_subtask_dur30_skip10"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_frame_sc_sad_od_spk_count_multi_subtask_dur30_skip10", "diar_tokenizer_multistream", "diar_tokens_frame_sc_sad_od_spk_count_multi_subtask_dur30_skip10")], 
 )
+
+# SPEECHLM_TASKS["codec_ssl_sd_frame_sc1_sad_multi_subtask_dur30_skip10"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_frame_sc1_sad_multi_subtask_dur30_skip10", "diar_tokenizer_multistream", "diar_tokens_frame_sc1_sad_multi_subtask_dur30_skip10")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_frame_sc2_sad_multi_subtask_dur30_skip10"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_frame_sc2_sad_multi_subtask_dur30_skip10", "diar_tokenizer_multistream", "diar_tokens_frame_sc2_sad_multi_subtask_dur30_skip10")], 
+# )
+
+SPEECHLM_TASKS["codec_ssl_sd_frame_sc_od_multi_subtask_dur30_skip10"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_frame_sc_od_multi_subtask_dur30_skip10", "diar_tokenizer_multistream", "diar_tokens_frame_sc_od_multi_subtask_dur30_skip10")], 
+)
+
+SPEECHLM_TASKS["codec_ssl_sd_event"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_event", "diar_tokenizer", "diar_tokens_event")], 
+)
+
+SPEECHLM_TASKS["codec_ssl_sd_event_od"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_event_od", "diar_tokenizer", "diar_tokens_event_od")], 
+)
+
+SPEECHLM_TASKS["codec_ssl_sd_event_od_after"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_event_od_after", "diar_tokenizer", "diar_tokens_event_od_after")], 
+)
+
+SPEECHLM_TASKS["codec_ssl_sd_event_sad"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_event_sad", "diar_tokenizer", "diar_tokens_event_sad")], 
+)
+
+SPEECHLM_TASKS["codec_ssl_sd_event_ovl"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_event_ovl", "diar_tokenizer", "diar_tokens_event_ovl")], 
+)
+
+
+# SPEECHLM_TASKS["codec_ssl_sd_event_od_ovl_aux"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_event_od_ovl_aux", "diar_tokenizer", "diar_tokens_event_od_ovl_aux")], 
+# )
+
+SPEECHLM_TASKS["codec_ssl_sd_event_spk_count"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_event_spk_count", "diar_tokenizer", "diar_tokens_event_spk_count")], 
+)
+
+SPEECHLM_TASKS["codec_ssl_sd_event_sad_spk_count_after"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_event_sad_spk_count_after", "diar_tokenizer", "diar_tokens_event_sad_spk_count_after")], 
+)
+
+SPEECHLM_TASKS["codec_ssl_sd_event_sad_od_spk_count_after"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_event_sad_od_spk_count_after", "diar_tokenizer", "diar_tokens_event_sad_od_spk_count_after")], 
+)
+
+SPEECHLM_TASKS["codec_ssl_sd_event_sad_od"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_event_sad_od", "diar_tokenizer", "diar_tokens_event_sad_od")], 
+)
+
+SPEECHLM_TASKS["codec_ssl_sd_event_spk_count_after"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_event_spk_count_after", "diar_tokenizer", "diar_tokens_event_spk_count_after")], 
+)
+
+SPEECHLM_TASKS["codec_ssl_sd_frame"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_frame", "diar_tokenizer", "diar_tokens_frame")], 
+)
+
+SPEECHLM_TASKS["codec_ssl_sd_frame_pad"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_frame_pad", "diar_tokenizer", "diar_tokens_frame_pad")], 
+)
+
+
+SPEECHLM_TASKS["codec_ssl_sd_frame_sad_pad_multi_subtask"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_frame_sad_pad_multi_subtask", "diar_tokenizer_multistream", "diar_tokens_frame_sad_pad_multi_subtask")], 
+)
+
+# SPEECHLM_TASKS["codec_ssl_sd_frame_sc"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_frame_sc", "diar_tokenizer", "diar_tokens_frame_sc")], 
+# )
+
+SPEECHLM_TASKS["codec_ssl_sd_frame_sad"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_frame_sad", "diar_tokenizer", "diar_tokens_frame_sad")], 
+)
+
+SPEECHLM_TASKS["codec_ssl_sd_frame_od"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_frame_od", "diar_tokenizer", "diar_tokens_frame_od")], 
+)
+
+SPEECHLM_TASKS["codec_ssl_sd_frame_od_after"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_frame_od_after", "diar_tokenizer", "diar_tokens_frame_od_after")], 
+)
+
+
+SPEECHLM_TASKS["codec_ssl_sd_frame_sad_od"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_frame_sad_od", "diar_tokenizer", "diar_tokens_frame_sad_od")], 
+)
+
+SPEECHLM_TASKS["codec_ssl_sd_frame_spk_count_after"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_frame_spk_count_after", "diar_tokenizer", "diar_tokens_frame_spk_count_after")], 
+)
+
+SPEECHLM_TASKS["codec_ssl_sd_frame_sad_spk_count_after"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_frame_sad_spk_count_after", "diar_tokenizer", "diar_tokens_frame_sad_spk_count_after")], 
+)
+
+
+SPEECHLM_TASKS["codec_ssl_sd_frame_sad_od_spk_count_after"] = SpeechLMTaskTemplate(
+    conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+    targets=[("diar_tokens_frame_sad_od_spk_count_after", "diar_tokenizer", "diar_tokens_frame_sad_od_spk_count_after")], 
+)
+
+# SPEECHLM_TASKS["codec_ssl_sd_frame_sc_sad_multi_subtask"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_frame_sc_sad_multi_subtask", "diar_tokenizer_multistream", "diar_tokens_frame_sc_sad_multi_subtask")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_frame_sc_ovl_aux_spk_count"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_frame_sc_ovl_aux_spk_count", "diar_tokenizer", "diar_tokens_frame_sc_ovl_aux_spk_count")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_frame_sc_od_ovl_aux"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_frame_sc_od_ovl_aux", "diar_tokenizer", "diar_tokens_frame_sc_od_ovl_aux")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_frame_sc_sad_ovl_aux"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_frame_sc_sad_ovl_aux", "diar_tokenizer", "diar_tokens_frame_sc_sad_ovl_aux")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_frame_sc_sad_od_ovl_aux_spk_count"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_frame_sc_sad_od_ovl_aux_spk_count", "diar_tokenizer", "diar_tokens_frame_sc_sad_od_ovl_aux_spk_count")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_frame_sc_sad_od_ovl_aux_spk_count_time"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_frame_sc_sad_od_ovl_aux_spk_count_time", "diar_tokenizer", "diar_tokens_frame_sc_sad_od_ovl_aux_spk_count_time")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_event_ovl_aux_spk_count"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_event_ovl_aux_spk_count", "diar_tokenizer", "diar_tokens_event_ovl_aux_spk_count")], 
+# )
+
+
+# SPEECHLM_TASKS["codec_ssl_sd_event_sad_od_ovl_aux_spk_count"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_event_sad_od_ovl_aux_spk_count", "diar_tokenizer", "diar_tokens_event_sad_od_ovl_aux_spk_count")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_event_sad_ovl_aux"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_event_sad_ovl_aux", "diar_tokenizer", "diar_tokens_event_sad_ovl_aux")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_event_frame_sc_sad_od_ovl_aux_spk_count"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_event_frame_sc_sad_od_ovl_aux_spk_count", "diar_tokenizer", "diar_tokens_event_frame_sc_sad_od_ovl_aux_spk_count")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_event_frame_sc_sad_od_ovl_aux_spk_count_multi_subtask"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_event_frame_sc_sad_od_ovl_aux_spk_count_multi_subtask", "diar_tokenizer_multistream", "diar_tokens_event_frame_sc_sad_od_ovl_aux_spk_count_multi_subtask")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_event_frame_2tasks_sc_sad_od_ovl_aux_spk_count_multi_2tasks"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_event_frame_2tasks_sc_sad_od_ovl_aux_spk_count_multi_2tasks", "diar_tokenizer_multistream", "diar_tokens_event_frame_2tasks_sc_sad_od_ovl_aux_spk_count_multi_2tasks")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_event_sad_od_ovl_aux_spk_count_multi_subtask"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_event_sad_od_ovl_aux_spk_count_multi_subtask", "diar_tokenizer_multistream", "diar_tokens_event_sad_od_ovl_aux_spk_count_multi_subtask")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_event_ovl_aux_spk_count_ipu"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_event_ovl_aux_spk_count_ipu", "diar_tokenizer", "diar_tokens_event_ovl_aux_spk_count_ipu")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_event_sad_od_ovl_aux_spk_count_ipu"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_event_sad_od_ovl_aux_spk_count_ipu", "diar_tokenizer", "diar_tokens_event_sad_od_ovl_aux_spk_count_ipu")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_event_ovl_aux_spk_count_multi"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_event_ovl_aux_spk_count_multi", "diar_tokenizer_multistream", "diar_tokens_event_ovl_aux_spk_count_multi")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_event_spk_count_multi"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_event_spk_count_multi", "diar_tokenizer_multistream", "diar_tokens_event_spk_count_multi")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_event_overlap_exp_spk_count"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_event_overlap_exp_spk_count", "diar_tokenizer", "diar_tokens_event_overlap_exp_spk_count")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_frame"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_frame", "diar_tokenizer", "diar_tokens_frame")], # frame based model 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_frame_sc_ovl_aux_spk_count_multi"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_frame_sc_ovl_aux_spk_count_multi", "diar_tokenizer_multistream", "diar_tokens_frame_sc_ovl_aux_spk_count_multi")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_frame_sc_sad_od_ovl_aux_spk_count_multi_subtask"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_frame_sc_sad_od_ovl_aux_spk_count_multi_subtask", "diar_tokenizer_multistream", "diar_tokens_frame_sc_sad_od_ovl_aux_spk_count_multi_subtask")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_frame_dur8_skip6_diar_model"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("diar_tokens_frame_dur8_skip6", "diar_tokenizer", "diar_tokens_frame_dur8_skip6")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_frame_dur8_skip6"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("text_frame_dur8_skip6", "text_bpe", "text_frame_dur8_skip6")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_event_dur3_skip1"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("text_event_dur3_skip1", "text_bpe", "text_event_dur3_skip1")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_event_dur30_skip10_spk_id"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("text_event_dur30_skip10_spk_id", "text_bpe", "text_event_dur30_skip10_spk_id")], 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_sd_frame_dur30_skip10"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("text_frame_dur30_skip10_0.1", "text_bpe", "text_frame_dur30_skip10_0.1")], # frame based model 
+# )
+
+# SPEECHLM_TASKS["codec_ssl_asr"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("text", "text_bpe", "text")],
+# )
+
+# SPEECHLM_TASKS["codec_ssl_tts"] = SpeechLMTaskTemplate(
+#     conditions=[("text", "text_bpe", "text"), ("utt2spk", "spk", "text")],
+#     targets=[("wav.scp", "codec_ssl", "kaldi_ark")],
+# )
+
+# SPEECHLM_TASKS["codec_ssl_plain_tts"] = SpeechLMTaskTemplate(
+#     conditions=[("text", "text_bpe", "text")],
+#     targets=[("wav.scp", "codec_ssl", "kaldi_ark")],
+# )
+
+# SPEECHLM_TASKS["codec_ssl_audiolm"] = SpeechLMTaskTemplate(
+#     conditions=[],
+#     targets=[("wav.scp", "codec_ssl", "kaldi_ark")],
+# )
+
+# SPEECHLM_TASKS["codec_ssl_se"] = SpeechLMTaskTemplate(
+#     conditions=[("mix.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     fixed_length_key="mix.scp",
+# )
+
+# SPEECHLM_TASKS["codec_ssl_tse"] = SpeechLMTaskTemplate(
+#     conditions=[("mix.scp", "codec_ssl", "kaldi_ark"), ("utt2spk", "spk", "text")],
+#     targets=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     fixed_length_key="mix.scp",
+# )
+
+# SPEECHLM_TASKS["aac_codecssl"] = SpeechLMTaskTemplate(
+#     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
+#     targets=[("text", "text_bpe", "text")],
+# )
+
+# SPEECHLM_TASKS["ag_codecssl"] = SpeechLMTaskTemplate(
+#     conditions=[("text", "text_bpe", "text")],
+#     targets=[("wav.scp", "codec_ssl", "kaldi_ark")],
+# )
+
+# SPEECHLM_TASKS["text_dialogue"] = SpeechLMTaskTemplate(
+#     conditions=[],
+#     targets=[("dialogue", "dialogue", "dialogue_json")],
+# )
+
+# SPEECHLM_TASKS["audio_dialogue"] = SpeechLMTaskTemplate(
+#     conditions=[],
+#     targets=[("dialogue", "dialogue", "dialogue_json")],
+# )
 
 # END OF TASK DEFINITION #
 

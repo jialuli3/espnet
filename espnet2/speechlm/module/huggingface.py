@@ -48,10 +48,12 @@ class HFTransformerDecoder(AbsTransformer):
         # NOTE(Jinchuan): lm_head and emb are only used in self.init_embeddings
         # and then removed. So this object only contains the transformer body,
         # i.e., self.model
+        cache_path = "/ocean/projects/cis210027p/jlix/cache"
         self.lm_head = causal_class.from_pretrained(
             hf_model_tag,
             attn_implementation=attention_choice,
             torch_dtype=dtype,
+            cache_dir=cache_path,
         ).get_output_embeddings()
         
         self.model = base_class.from_pretrained(
@@ -59,6 +61,7 @@ class HFTransformerDecoder(AbsTransformer):
             attn_implementation=attention_choice,
             revision=revision,
             torch_dtype=dtype,
+            cache_dir=cache_path,
         )
         self.emb = self.model.get_input_embeddings()
 
