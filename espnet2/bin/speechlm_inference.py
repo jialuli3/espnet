@@ -58,6 +58,8 @@ class SpeechLM:
         minlenratio: float = 10.0,
         fixed_length: bool = False,
         codec_conf: dict = None,
+        start_modality_index: int = 35, 
+        max_stream: int = 0, 
     ):
         """Initialize SpeechLM module."""
 
@@ -79,6 +81,7 @@ class SpeechLM:
         self.token_bias = train_args.token_bias
         self.modalities = [triplet[1] for triplet in self.task.data_triplets]
         self.pad = self.token_list.index("<pad>")
+        self.max_stream = max_stream
 
         # (2) predict mask
         self.inference_nq = model.corelm.nq if inference_nq is None else inference_nq
@@ -119,6 +122,12 @@ class SpeechLM:
                         False
                     )
 
+            elif modality == "diar_tokenizer_multistream":
+                start, end = self.token_bias[modality]
+                mask[0, start:end] = False
+                mask[1:, self.pad] = False
+                mask[1: self.max_stream, start:end] = False
+
             else: # single-stream, discrete tokens
                 start, end = self.token_bias[modality]
                 mask[0, start:end] = False
@@ -148,6 +157,8 @@ class SpeechLM:
             nq=self.inference_nq,
             aux_start=self.token_bias["codec"][0] if "codec" in self.token_bias else 0,
             fixed_length=fixed_length,
+            start_modality_index=start_modality_index,
+            max_stream=max_stream,
         )
 
         # (4) Only a limited number of modalities support detokenization
@@ -165,10 +176,17 @@ class SpeechLM:
         else:
             self.text_bpe_tokenizer = None
 
+        # diar tokenizer
+        if "diar_tokenizer" in self.modalities or "diar_tokenizer_multistream" in self.modalities:
+            self.diar_tokenizer = self.preprocessor.converter
+        else:
+            self.diar_tokenizer = None
+
         # (5) speaker prompt setup
         assert not ("codec" in self.modalities and "codec_ssl" in self.modalities)
         self.spk_modality = "codec" if "codec" in self.modalities else "codec_ssl"
 
+        
     @typechecked
     @torch.no_grad()
     def __call__(self, data: Dict) -> List:
@@ -195,7 +213,7 @@ class SpeechLM:
         # (2) record the prefix segments
         retval = [[] for _ in self.modalities]
         prefix = dec_seq[0, :prefix_len]
-        
+
         segments = self.parse_sequence(prefix)
         if len(segments) != len(self.task.conditions):
             raise ValueError("Invalid Condition segments")
@@ -252,6 +270,30 @@ class SpeechLM:
                 # sentencepiece will include "\n" but huggingface will not.
                 # make it uniform
                 detokenized = detokenized.strip() + "\n"
+
+            elif modality in ["diar_tokenizer"]:
+                segment = segment[segment[:, 0] != self.pad]
+                segment = segment[:, 0]
+                detokenized = self.diar_tokenizer.ids2tokens(
+                    segment.cpu().numpy()
+                )
+                detokenized = " ".join(detokenized)
+                # sentencepiece will include "\n" but huggingface will not.
+                # make it uniform
+                detokenized = detokenized.strip() + "\n"
+
+            elif modality in ["diar_tokenizer_multistream"]:
+                segment = segment[segment[:, 0] != self.pad]
+                segment = segment[:, :self.max_stream].transpose(0, 1)
+                detokenized = []
+                for i in range(len(segment)):
+                    curr_detokenized = self.diar_tokenizer.ids2tokens(
+                        segment[i].cpu().numpy()
+                    )
+                    detokenized.append(" ".join(curr_detokenized))
+                detokenized = " | ".join(detokenized)
+                detokenized = detokenized.strip() + "\n"
+                segment = segment.flatten()
 
             else:
                 segment = segment[:, 0] - self.token_bias[modality][0]
@@ -326,6 +368,8 @@ def inference(
     fixed_length: bool = False,
     # offline tokenizers
     codec_conf: dict = None,
+    start_modality_index: int = 35, 
+    max_stream: int = 0,
 ):
     """Run SpeechLM inference."""
     if batch_size > 1:
@@ -366,6 +410,8 @@ def inference(
         fixed_length=fixed_length,
         task=task,
         codec_conf=codec_conf,
+        start_modality_index=start_modality_index,
+        max_stream=max_stream,
     )
     # NOTE(Jinchuan): in multi-processing, avoid memory spike
     time.sleep(rank * 5)
@@ -400,7 +446,7 @@ def inference(
         (output_dir / name).mkdir(parents=True, exist_ok=True)
         file_name = str(output_dir / name / f"rank{rank}_token_{name}")
         token_writers[name] = WriteHelper(f"ark,scp:{file_name}.ark,{file_name}.scp")
-        if modality in ["spk", "codec", "text_bpe", "codec_ssl"]:
+        if modality in ["spk", "codec", "text_bpe", "codec_ssl", "diar_tokenizer", "diar_tokenizer_multistream"]:
             file_name = str(output_dir / name / f"rank{rank}_{name}")
             writers[name] = open(file_name, "w")
 
@@ -460,7 +506,7 @@ def inference(
                         writers[name].write(f"{example_name} {audio_path}\n")
                         logging.info(f"Save audio: {audio_path}")
 
-                    elif modality in ["text_bpe"]:
+                    elif modality in ["text_bpe", "diar_tokenizer", "diar_tokenizer_multistream"]:
                         detokenized = detokenized.strip()
                         writers[name].write(f"{example_name} {detokenized}\n")
                         logging.info(f"Save text: {detokenized}")
@@ -626,6 +672,20 @@ def get_parser():
              "The inference is specified by the fixed_length_key of "
              "each task definition "
              "E.g., inference length for speech enhancement is the same as the mix.scp "
+    )
+
+    group.add_argument(
+        "--start_modality_index",
+        type=int,
+        default=35,
+        help="start modality index assumption",
+    )
+
+    group.add_argument(
+        "--max_stream",
+        type=int,
+        default=9,
+        help="max stream used in multistream decoding",
     )
 
     # Offline tokenizer configurations. The offline tokenizers are not used during

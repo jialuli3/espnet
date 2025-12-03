@@ -167,7 +167,7 @@ class ARDelayLM(ARParallelLM):
             )
 
             if step  == 1:
-                gen_tok[..., 0] = 35
+                gen_tok[..., 0] = opts.start_modality_index
 
             # NOTE(Jinchuan): Due to delay interleave, the first predictions
             # are replaced by PAD. Especially, when step == 1, the prediction

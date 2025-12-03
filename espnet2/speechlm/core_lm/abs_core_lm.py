@@ -26,6 +26,8 @@ class SpeechLMInferenceOptions:
     nq: int = None
     aux_start: int = 0
     fixed_length: bool = False
+    start_modality_index: int = 35
+    max_stream: int = 0
 
 
 class AbsCoreLM(torch.nn.Module, ABC):
