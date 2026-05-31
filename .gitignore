@@ -128,3 +128,15 @@ tools/condarc
 tools/lightning_constraints.txt
 tools/versa
 tools/ParallelWaveGAN
+
+# local SpeechLM AMI artifacts
+egs2/ami/speechlm1/5_spks_backup/
+egs2/ami/speechlm1/data_synthetic/
+egs2/ami/speechlm1/data_all_5spks/
+egs2/ami/speechlm1/data_ihm_new/
+egs2/ami/speechlm1/dump_*/
+egs2/ami/speechlm1/exp*/
+egs2/ami/speechlm1/exp/
+egs2/ami/speechlm1/**/*.ark
+egs2/ami/speechlm1/**/*.pth
+egs2/ami/speechlm1/**/*.mdl

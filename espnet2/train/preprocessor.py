@@ -13,6 +13,7 @@ import scipy.signal
 import soundfile
 from typeguard import typechecked
 
+import espnet2.speechlm.definitions as speechlm_definitions
 from espnet2.layers.augmentation import DataAugmentation
 from espnet2.text.build_tokenizer import build_tokenizer
 from espnet2.text.cleaner import TextCleaner
@@ -2867,3 +2868,392 @@ class Qwen2AudioPreprocessor(AbsPreprocessor):
             "input_features": input_features,
             "feature_attention_mask": feature_attention_mask,
         }
+
+
+class SpeechLMPreprocessor(AbsPreprocessor):
+    """Preprocessor specifically for SpeechLM models"""
+
+    @typechecked
+    def __init__(
+        self,
+        token_list: List,
+        token_bias: Dict,
+        train: bool = True,
+        encoder_decoder_format: Optional[bool] = False,
+        loss_region: str = 'whole',
+        audio_modality: str = 'codec_ssl',
+        # codec related:
+        codec_token_per_frame: int = 1,
+        codec_token_in_use: Optional[int] = None,
+        # tokenizer related: Phone & BPE
+        unk_symbol: Optional[str] = "<unk>",
+        space_symbol: Optional[str] = "<space>",
+        non_linguistic_symbols: Optional[Union[Path, str, Iterable[str]]] = None,
+        g2p_type: Optional[str] = None,
+        subword_model: Optional[Union[Path, str, Iterable[str]]] = None,
+        subword_model_type: str = "sentencepiece",
+        bpe_encode_kwargs: Optional[Dict] = None,
+        text_cleaner: Optional[str] = None,
+        # speaker prompt
+        speaker_prompt_length: int = 500,
+        pad_speaker_prompt: bool = True,
+        # others
+        n_ctx: int = 4096,
+        inter_segment_pad: int = 0,
+        extra_names_and_modalities=[
+            "sampled.scp,codec",
+        ],
+        asr_apply_time_mask: bool = False,
+        asr_time_mask_config: dict = dict(),
+    ):
+        self.token_list = token_list.copy()
+        self.token_bias = token_bias.copy()
+        self.train = train
+        self.encoder_decoder_format = encoder_decoder_format
+        self.audio_modality = audio_modality
+        self.n_ctx = n_ctx - codec_token_in_use  # in case this is delay interleave
+        self.inter_segment_pad = inter_segment_pad
+        self.pad = token_list.index("<pad>")
+        self.unk = token_list.index("<unk>")
+
+        assert not (
+            "codec" in token_bias and "codec_ssl" in token_bias
+        ), "Cannot use both modality codec and codec_ssl"
+
+        self.modalities = speechlm_definitions.MODALITIES
+        self.tasks = speechlm_definitions.SPEECHLM_TASKS
+
+        assert loss_region in ["whole", "target"]
+        self.loss_region = loss_region
+
+        self.converter = TokenIDConverter(
+            token_list=token_list,
+            unk_symbol=unk_symbol,
+        )
+        self.text_cleaner = TextCleaner(text_cleaner)
+
+        ### Modality-specific utilities
+
+        # Text BPE (text_bpe):
+        if subword_model is not None:
+            if bpe_encode_kwargs is None:
+                bpe_encode_kwargs = dict()
+            if subword_model_type == "sentencepiece":
+                self.bpe = build_tokenizer(
+                    token_type="bpe",
+                    bpemodel=subword_model + ".model",
+                    encode_kwargs=bpe_encode_kwargs,
+                )
+            else:
+                self.bpe = build_tokenizer(
+                    token_type="hugging_face",
+                    bpemodel=subword_model,
+                )
+        else:
+            self.bpe = None
+
+        # Phones (g2p):
+        if g2p_type is not None:
+            self.g2p = build_tokenizer(
+                token_type="phn",
+                space_symbol=space_symbol,
+                non_linguistic_symbols=non_linguistic_symbols,
+                g2p_type=g2p_type,
+            )
+        else:
+            self.g2p = None
+
+        # Codec model (codec):
+        self.codec_token_per_frame = codec_token_per_frame
+        if codec_token_in_use is None:
+            codec_token_in_use = codec_token_per_frame
+            assert codec_token_in_use <= codec_token_per_frame
+        self.codec_token_in_use = codec_token_in_use
+
+        # speaker prompt
+        self.speaker_prompt_length = speaker_prompt_length
+        self.pad_speaker_prompt = pad_speaker_prompt
+
+        # extra entries
+        self.extra_names_and_modalities = [
+            tup.split(",") for tup in extra_names_and_modalities
+        ]
+
+        # time-mask, or specaug:
+        self.asr_apply_time_mask = asr_apply_time_mask
+        if asr_apply_time_mask and train:
+            from espnet2.layers.mask_along_axis import MaskAlongAxisVariableMaxWidth
+            self.asr_time_mask=MaskAlongAxisVariableMaxWidth(**asr_time_mask_config)
+        else:
+            self.asr_time_mask = None
+
+    @typechecked
+    def __call__(
+        self, uid: str, data: Dict[str, Union[str, np.ndarray, tuple]]
+    ) -> Dict[str, Union[np.ndarray, List]]:
+        new_data = dict()
+
+        # (1) task parsing
+        task_name = uid.strip().split(" ")[0]
+        task = self.tasks[task_name]
+
+        data_tuples = [] # tuple of (name, modality, content, role, target)
+        if task_name in ["text_dialogue", "audio_dialogue"]:
+            for idx, (role, modality, target, content) in enumerate(data['dialogue']):
+                name = str(idx)
+                target = str(target) == "True"
+
+                if role == "system" and modality == "codec_ssl":
+                    modality = "spk"
+
+                data_tuples.append((name, modality, role, content, target))
+        else:
+            for idx, (name, modality, _) in enumerate(task.data_triplets):
+                content = data[name]
+                role = None
+                target = idx >= task.n_conditions
+                data_tuples.append((name, modality, role, content, target))
+
+        # (2) modality-specific processing. 
+        seqs, loss_masks = [], []
+        cache = dict(task_name=task_name)
+        for idx, data_tuple in enumerate(data_tuples):
+            name, modality, role, content, target = data_tuple
+            # NOTE(Jinchuan): add an indicator to the end for each target segment.
+            # This is for multi-segment inference.
+            # end-of-sentence: the last target segment
+            # end-of-utterance: all other target segments
+            if not target:
+                end_tok = None
+            elif idx == len(data_tuples) - 1:
+                end_tok = "<sos/eos>"
+            else:
+                end_tok = "<eou>" # end-of-utterance
+            
+            value, _ = self.modality_specific_processing(
+                content,
+                modality, 
+                cache,
+                end_tok=end_tok,
+            )
+
+            # NOTE(Jinchuan): when the role is set, like in post-training, we
+            # add this role token.
+            if role is not None:
+                if role == "system":
+                    role = "<system_prompt>"
+                elif role == "user":
+                    role = "<user_input>"
+                elif role == "assistant":
+                    role = "<assistant_output>"
+                else:
+                    raise ValueError(f"Unrecognized role {role}")
+                role = self.special_token(role)
+                value = np.concatenate([role, value])
+
+            # NOTE(Jinchuan): specifically design for delay interleave: after the
+            # interleave, there is still no overlap between consecutive segments.
+            if idx != len(data_tuples) - 1  and self.inter_segment_pad > 0:
+                pad = np.tile(self.special_token("<pad>"), self.inter_segment_pad)
+                value = np.concatenate([value, pad], axis=0)
+
+            seqs.append(value)
+            target = True if self.loss_region == "whole" else target
+            loss_masks.append(value * 0 + int(target))
+        
+        # (3) splice
+        sos_eos = self.special_token("<sos/eos>")
+        if task.use_task_identifier:
+            task_identifier = f"<{task_name}_task>"
+        else:
+            task_identifier = "<unkown_task_identifer>"
+        task_identifier = self.special_token(task_identifier)
+
+        if self.encoder_decoder_format:
+            raise NotImplementedError('encoder decoder is not supported yet')
+        else:
+            seqs = [sos_eos] + [task_identifier] + seqs
+            dec_seq = np.concatenate(seqs, axis=0).reshape(-1, self.codec_token_in_use)
+
+            special_loss_mask = np.zeros_like(sos_eos) + int(self.loss_region == "whole")
+            loss_masks = [special_loss_mask] * 2 + loss_masks
+            loss_mask = np.concatenate(loss_masks, axis=0).reshape(dec_seq.shape)
+            loss_mask[dec_seq == 0] = 0
+
+            dec_seq, loss_mask = dec_seq[:self.n_ctx], loss_mask[:self.n_ctx]
+
+            # NOTE(Jinchuan): remove these special tokens to full preserve text LLM format.
+            # the first three token: <sos> <task_id> <modality_id>
+            if task_name == "textlm":
+                dec_seq = dec_seq[3:]
+                loss_mask = loss_mask[3:]
+
+        new_data["dec_seq"] = dec_seq
+        new_data["loss_mask"] = loss_mask
+
+        # (4) continuous features
+        new_conti_feats = []
+        new_data["conti_feats"] = new_conti_feats
+
+        # (5) prefix_len, as inference legacy. temp code
+        prefix_len = sum(len(seg) for seg in seqs[:-1]) // self.codec_token_in_use
+        new_data["prefix_len"] = np.array([prefix_len])
+
+        # finally, sanity check
+        if np.isin(self.unk, new_data["dec_seq"]):
+            logging.warning(f"Unknown token is in the decoder seq. UID: {uid}")
+            self.diagnose(new_data)
+
+        # self.diagnose(new_data) # For debug. Enable this to check the sequence format
+
+        return new_data
+
+    def special_token(self, token):
+        token_idx = self.token_list.index(token)
+        token_idx = np.array([token_idx])
+        token_idx = np.pad(
+            token_idx, 
+            (0, self.codec_token_in_use - 1), 
+            mode="constant", 
+            constant_values=self.pad
+        )
+        return token_idx
+
+    def modality_specific_processing(self, value, modality, cache, end_tok=None):
+        # multi-stream discrete modalities
+        if modality in ["codec", "spk", "codec_ssl"]:
+            value = value.reshape(-1, self.codec_token_per_frame)
+            value = value[:, :self.codec_token_in_use]
+
+            if modality == "spk":
+                # speaker prompt has a fixed length
+                if len(value) > self.speaker_prompt_length:
+                    start = random.randint(
+                        0, len(value) - self.speaker_prompt_length - 1
+                    )
+                    value = value[start : start + self.speaker_prompt_length]
+                elif self.pad_speaker_prompt:
+                    pad_len = self.speaker_prompt_length - len(value)
+                    value = np.pad(
+                        value,
+                        ((0, pad_len), (0, 0)),
+                        mode="constant",
+                        constant_values=self.pad,
+                    )
+            
+                bias_modality = self.audio_modality
+            else:
+                bias_modality = modality
+            
+            if bias_modality == 'codec_ssl':
+                token_bias = self.token_bias['ssl'][0]
+            else:
+                token_bias = self.token_bias['codec'][0]
+                
+            value = np.where(
+                value == self.pad,
+                self.pad,
+                value + token_bias
+            )
+            
+            conti_feat = None
+
+        # Other discrete modalities
+        elif modality in ["ssl", "text_bpe", "g2p", "video_ssl", "svs_lb", "diar_tokenizer", "diar_tokenizer_multistream"]:
+
+            if modality in ["text_bpe", "g2p"]:
+                if isinstance(value, str):
+                    try:
+                        value = self.text_cleaner(value)
+                    except:
+                        logging.warning(
+                            f"Failed to apply cleaner to {value}. Make it empty"
+                        )
+                        value = ""
+                    tokenizer = self.bpe if modality == "text_bpe" else self.g2p
+                    value = tokenizer.text2tokens(value)
+                    if modality == "g2p":
+                        value = [f"g2p_{tok}" for tok in value]
+                    value = self.converter.tokens2ids(value)
+                    value = np.array(value)
+
+                else:
+                    # already tokenized offline
+                    assert isinstance(value, np.ndarray)
+                    value = value + self.token_bias[modality][0]
+
+            elif modality in ["ssl", "video_ssl"]:
+                value = value + self.token_bias[modality][0]
+            
+            elif modality in ["svs_lb", "diar_tokenizer"]:
+                #logging.info(f"Use diar tokenizer, {value}")
+                value = value.split(" ")  # str to token list, no '\n'
+                value = self.converter.tokens2ids(value)
+                value = np.array(value)  # NOTE(yiwen) don't need to add token bias
+                #logging.info(f"Diarized tokens, {value}")
+
+            elif modality in ["diar_tokenizer_multistream"]:
+                value = value.split("|")  # separate for each stream
+                value_list = []
+                for v in value:
+                    v_list = v.strip().split(" ")
+                    value_list.append(self.converter.tokens2ids(v_list))
+                value = np.array(value_list)  # NOTE(yiwen) don't need to add token bias
+                #logging.info(f"Diarized tokens before padding, {value}")
+            else:
+                raise NotImplementedError
+
+            if modality.endswith("multistream"):
+                max_len = max(len(row) for row in value)
+                padded_value = np.full((max_len, self.codec_token_in_use), self.pad, dtype=int)
+                for i, row in enumerate(value):
+                    padded_value[:len(row), i] = row
+                value = padded_value
+                #logging.info(f"Diarized tokens after padding, {value}")
+            else:
+                value = np.pad(
+                    np.expand_dims(value, 1),
+                    ((0, 0), (0, self.codec_token_in_use - 1)),
+                    mode="constant",
+                    constant_values=self.pad,
+                )
+
+            conti_feat = None
+
+        # continuous modalities
+        elif modality in ["text_emb"]:
+            raise NotImplementedError
+
+        else:
+            raise NotImplementedError
+    
+        if modality in ["codec", "ssl", "codec_ssl"] and "asr" in cache["task_name"] and self.asr_apply_time_mask and self.train:
+            value = np.expand_dims(value, axis=0)
+            value, _ = self.asr_time_mask(value)
+            value = np.squeeze(value, axis=0)
+        
+        value = value.flatten()
+        modality_idx = self.special_token(f"<{modality}_start/end>")
+        value = np.concatenate([modality_idx, value])
+        if end_tok is not None:
+            end_tok = self.special_token(end_tok)
+            value = np.concatenate([value, end_tok])        
+
+        return value.astype(np.int64), conti_feat
+
+    def diagnose(self, data):
+        """Only for debug"""
+        dec_seq = data.get("dec_seq")
+        loss_mask = data.get("loss_mask")
+
+        logging.warning(f"Diagnose in preprocessor ...")
+        for name, seq in [
+            ("decoder", zip(dec_seq, loss_mask)),
+        ]:
+            logging.warning(f"{name} ...")
+            for idx, (patch, patch_loss_mask) in enumerate(seq):
+                patch = patch.tolist()
+                patch_str = ", ".join(self.converter.ids2tokens(patch))
+                logging.warning(f"Patch: {idx} -> {patch} {patch_str} {patch_loss_mask}")
+
+        raise ValueError("End of Diagnose")
