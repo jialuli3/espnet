@@ -48,6 +48,7 @@ def collect_stats(
         count_dict = defaultdict(lambda: 0)
 
         with DatadirWriter(output_dir / mode) as datadir_writer:
+            batch_keys = []
             for iiter, (keys, batch) in enumerate(itr, 1):
                 batch = to_device(batch, "cuda" if ngpu > 0 else "cpu")
 
@@ -59,9 +60,13 @@ def collect_stats(
                         if f"{name}_lengths" in batch:
                             lg = int(batch[f"{name}_lengths"][i])
                             data = data[:lg]
+                        if not hasattr(data, "shape"):
+                            continue
                         datadir_writer[f"{name}_shape"][key] = ",".join(
                             map(str, data.shape)
                         )
+                        if name not in batch_keys:
+                            batch_keys.append(name)
 
                 if model is not None:
                     # 2. Extract feats
@@ -115,9 +120,8 @@ def collect_stats(
             )
 
         # batch_keys and stats_keys are used by aggregate_stats_dirs.py
+        (output_dir / mode).mkdir(parents=True, exist_ok=True)
         with (output_dir / mode / "batch_keys").open("w", encoding="utf-8") as f:
-            f.write(
-                "\n".join(filter(lambda x: not x.endswith("_lengths"), batch)) + "\n"
-            )
+            f.write("\n".join(batch_keys) + "\n")
         with (output_dir / mode / "stats_keys").open("w", encoding="utf-8") as f:
             f.write("\n".join(sum_dict) + "\n")

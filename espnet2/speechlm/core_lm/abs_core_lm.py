@@ -28,6 +28,7 @@ class SpeechLMInferenceOptions:
     fixed_length: bool = False
     start_modality_index: int = 35
     max_stream: int = 0
+    stop_token_ids: Tuple[int, ...] = ()
 
 
 class AbsCoreLM(torch.nn.Module, ABC):

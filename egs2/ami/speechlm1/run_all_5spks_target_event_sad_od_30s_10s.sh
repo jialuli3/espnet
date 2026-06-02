@@ -16,11 +16,12 @@ data_name="all"
 data_dir="data_all_5spks"
 dump_dir="dump_all_5spks"
 exp_dir="exp_all_5spks"
+cmd_backend="local"
 #inference_model="latest.pth"
 
 
-stage=3             # Processes starts from the specified stage.
-stop_stage=3     # Processes is stopped at the specified stage.
+stage=2             # Processes starts from the specified stage.
+stop_stage=2     # Processes is stopped at the specified stage.
 
 . utils/parse_options.sh
 
@@ -42,7 +43,7 @@ if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
     --ngpu 1 \
     --data_outputs "wav" \
     --dumpdir "${dump_dir}" \
-    --cmd_backend "slurm" \
+    --cmd_backend "${cmd_backend}" \
     --codec_stage 100 \
     --use_sad true \
     --use_od true \
@@ -67,7 +68,7 @@ if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then
     --ngpu 1 \
     --data_outputs "diar_tokens" \
     --dumpdir "${dump_dir}" \
-    --cmd_backend "slurm_1gpu" \
+    --cmd_backend "${cmd_backend}" \
     --expdir "${exp_dir}" \
     --stage 8 --stop_stage 8
 fi
@@ -87,7 +88,7 @@ if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
     --ngpu 1 \
     --data_outputs "diar_tokens" \
     --dumpdir "dump_ami_ihm_new" \
-    --cmd_backend "slurm" \
+    --cmd_backend "${cmd_backend}" \
     --expdir "${exp_dir}" \
     --speechlm_exp "${exp_dir}/speechlm_${task}_all_${config_name}" \
     --tokenizer "diar_tokenizer" \

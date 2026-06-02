@@ -334,6 +334,14 @@ SPEECHLM_TASKS["codec_ssl_sd_event_sad_od_dur30_skip10"] = SpeechLMTaskTemplate(
     targets=[("diar_tokens_event_sad_od_dur30_skip10", "diar_tokenizer", "diar_tokens_event_sad_od_dur30_skip10")], 
 )
 
+SPEECHLM_TASKS["codec_ssl_sd_cache_event_sad_od_dur30_skip10"] = SpeechLMTaskTemplate(
+    conditions=[
+        ("cache_wav.scp", "codec_ssl", "multicol_kaldi_ark"),
+        ("wav.scp", "codec_ssl", "kaldi_ark"),
+    ],
+    targets=[("diar_tokens_event_sad_od_dur30_skip10", "diar_tokenizer", "diar_tokens_event_sad_od_dur30_skip10")],
+)
+
 SPEECHLM_TASKS["codec_ssl_sd_event_sad_od_dur60_skip10"] = SpeechLMTaskTemplate(
     conditions=[("wav.scp", "codec_ssl", "kaldi_ark")],
     targets=[("diar_tokens_event_sad_od_dur60_skip10", "diar_tokenizer", "diar_tokens_event_sad_od_dur60_skip10")], 
@@ -775,11 +783,17 @@ special_tokens = [
     "<user_input>",
     "<assistant_output>",
     "<eou>",
+    "<enroll_spk1>",
+    "<enroll_spk2>",
+    "<enroll_spk3>",
+    "<enroll_spk4>",
+    "<enroll_spk5>",
 ]
 
 
 def pad_until(token_list, until):
-    assert until > len(token_list)
+    if len(token_list) >= until:
+        return token_list
     for idx in range(len(token_list), until):
         token_list.append(f"<unused_token_{idx}>")
     return token_list

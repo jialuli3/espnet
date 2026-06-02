@@ -488,7 +488,7 @@ class Trainer:
                     ]
                     wandb.log_artifact(artifact, aliases=aliases)
 
-                # 6. Remove the model files excluding n-best epoch and latest epoch
+                # 6. Remove the model files excluding n-best epoch
                 _removed = []
                 # Get the union set of the n-best among multiple criterion
                 nbests = set().union(
@@ -512,9 +512,21 @@ class Trainer:
                         suffix=f"till{iepoch}epoch",
                     )
 
-                for e in range(1, iepoch):
+                for e in range(1, iepoch + 1):
                     p = output_dir / f"{e}epoch.pth"
                     if p.exists() and e not in nbests:
+                        p.unlink()
+                        _removed.append(str(p))
+                        latest = output_dir / "latest.pth"
+                        if (
+                            e == iepoch
+                            and latest.is_symlink()
+                            and latest.readlink() == Path(f"{iepoch}epoch.pth")
+                        ):
+                            latest.unlink()
+                            _removed.append(str(latest))
+                    p = output_dir / f"checkpoint_{e}.pth"
+                    if p.exists() and e != iepoch:
                         p.unlink()
                         _removed.append(str(p))
                 if len(_removed) != 0:

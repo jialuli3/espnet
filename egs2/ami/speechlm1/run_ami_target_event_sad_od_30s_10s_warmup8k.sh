@@ -8,17 +8,20 @@ train_config="conf/${config_name}.yaml"
 inference_config="conf/decode_diar_token.yaml"
 task="codec_ssl_sd_event_sad_od_dur30_skip10"
 inference_model="valid.acc_all.ave_3best.pth"
-data_dir="data_ihm_new"
+data_dir="data_ami_ihm_new"
 dump_dir="dump_ami_ihm_new"
 exp_dir="exp_ami_ihm_new"
 #inference_model="latest.pth"
 
 
-stage=2             # Processes starts from the specified stage.
-stop_stage=2     # Processes is stopped at the specified stage.
+stage=3             # Processes starts from the specified stage.
+stop_stage=3     # Processes is stopped at the specified stage.
 
 . utils/parse_options.sh
 
+. ./path.sh
+export PYTHONPATH="${PWD}/../../..:${PYTHONPATH:-}"
+export PYTHONDONTWRITEBYTECODE=1
 if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
   ./speechlm.sh \
     --task ${task} \
@@ -82,7 +85,7 @@ if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
     --ngpu 1 \
     --data_outputs "diar_tokens" \
     --dumpdir "${dump_dir}" \
-    --cmd_backend "slurm" \
+    --cmd_backend "local" \
     --expdir "${exp_dir}" \
     --tokenizer "diar_tokenizer" \
     --output_format "event" \
@@ -93,66 +96,6 @@ if [ ${stage} -le 3 ] && [ ${stop_stage} -ge 3 ]; then
     --collar 0.0 \
     --skip_interval 30 \
     --decoding true \
-    --stage 9 --stop_stage 10
+    --stage 10 --stop_stage 10
 fi
 
-
-if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
-  ./speechlm.sh \
-    --task ${task} \
-    --data_name "alimeeting" \
-    --data_dir "data_alimeeting" \
-    --train_set "${train_set}" \
-    --valid_set "${valid_set}" \
-    --test_sets "${test_set}"  \
-    --train_config "${train_config}" \
-    --inference_model "${inference_model}" \
-    --inference_config "${inference_config}" \
-    --nj 1 --inference_nj 1 \
-    --ngpu 1 \
-    --data_outputs "diar_tokens" \
-    --dumpdir "dump_alimeeting" \
-    --cmd_backend "slurm" \
-    --expdir "${exp_dir}" \
-    --speechlm_exp "${exp_dir}/speechlm_${task}_ami_${config_name}" \
-    --tokenizer "diar_tokenizer" \
-    --output_format "event" \
-    --check_overlap_sad true \
-    --apply_clustering true \
-    --apply_local_speaker_matching false \
-    --gpu_inference true \
-    --collar 0.0 \
-    --skip_interval 30 \
-    --decoding true \
-    --stage 9 --stop_stage 10
-fi
-
-if [ ${stage} -le 5 ] && [ ${stop_stage} -ge 5 ]; then
-  ./speechlm.sh \
-    --task ${task} \
-    --data_name "aishell4" \
-    --data_dir "data_aishell4" \
-    --train_set "${train_set}" \
-    --valid_set "${valid_set}" \
-    --test_sets "${test_set}"  \
-    --train_config "${train_config}" \
-    --inference_model "${inference_model}" \
-    --inference_config "${inference_config}" \
-    --nj 1 --inference_nj 1 \
-    --ngpu 1 \
-    --data_outputs "diar_tokens" \
-    --dumpdir "dump_aishell4" \
-    --cmd_backend "slurm" \
-    --expdir "${exp_dir}" \
-    --speechlm_exp "${exp_dir}/speechlm_${task}_ami_${config_name}" \
-    --tokenizer "diar_tokenizer" \
-    --output_format "event" \
-    --check_overlap_sad true \
-    --apply_clustering true \
-    --apply_local_speaker_matching false \
-    --gpu_inference true \
-    --collar 0.0 \
-    --skip_interval 30 \
-    --decoding true \
-    --stage 9 --stop_stage 10
-fi

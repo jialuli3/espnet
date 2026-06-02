@@ -11,11 +11,7 @@ class MultiColKaldiArkReader:
             self.utt2example[name] = contents
 
     def __getitem__(self, name):
-        # load all items and concat. previously we randomly choose one in the DPO work
-        retval = np.concatenate([
-            kaldiio.load_mat(content) for content in self.utt2example[name]
-        ])
-        return retval
+        return tuple(kaldiio.load_mat(content) for content in self.utt2example[name])
 
     def __len__(self):
         return len(self.utt2example)

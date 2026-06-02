@@ -185,9 +185,23 @@ class ARDelayLM(ARParallelLM):
             generated["score"].append(gen_score)
 
             # (3.3) detect ended hypotheses
+            finish_token = prev_tok[:, 0, 0]
+            if len(opts.stop_token_ids) > 0:
+                stop_token_ids = torch.tensor(opts.stop_token_ids, device=opts.device)
+                finish_by_stop_token = torch.any(
+                    finish_token.unsqueeze(-1) == stop_token_ids,
+                    dim=-1,
+                )
+            else:
+                finish_by_stop_token = torch.zeros_like(finish_idx, dtype=torch.bool)
             finish_idx = torch.where(
-                torch.logical_and(prev_tok[:, 0, 0] == opts.eos, finish_idx == -1),
+                torch.logical_and(finish_token == opts.eos, finish_idx == -1),
                 step,
+                finish_idx,
+            )
+            finish_idx = torch.where(
+                torch.logical_and(finish_by_stop_token, finish_idx == -1),
+                step + 1,
                 finish_idx,
             )
 

@@ -3034,6 +3034,7 @@ class SpeechLMPreprocessor(AbsPreprocessor):
                 content,
                 modality, 
                 cache,
+                name=name,
                 end_tok=end_tok,
             )
 
@@ -3119,42 +3120,61 @@ class SpeechLMPreprocessor(AbsPreprocessor):
         )
         return token_idx
 
-    def modality_specific_processing(self, value, modality, cache, end_tok=None):
+    def modality_specific_processing(self, value, modality, cache, name=None, end_tok=None):
         # multi-stream discrete modalities
         if modality in ["codec", "spk", "codec_ssl"]:
-            value = value.reshape(-1, self.codec_token_per_frame)
-            value = value[:, :self.codec_token_in_use]
-
             if modality == "spk":
-                # speaker prompt has a fixed length
-                if len(value) > self.speaker_prompt_length:
-                    start = random.randint(
-                        0, len(value) - self.speaker_prompt_length - 1
-                    )
-                    value = value[start : start + self.speaker_prompt_length]
-                elif self.pad_speaker_prompt:
-                    pad_len = self.speaker_prompt_length - len(value)
-                    value = np.pad(
-                        value,
-                        ((0, pad_len), (0, 0)),
-                        mode="constant",
-                        constant_values=self.pad,
-                    )
-            
                 bias_modality = self.audio_modality
             else:
                 bias_modality = modality
-            
+
             if bias_modality == 'codec_ssl':
                 token_bias = self.token_bias['ssl'][0]
             else:
                 token_bias = self.token_bias['codec'][0]
-                
-            value = np.where(
-                value == self.pad,
-                self.pad,
-                value + token_bias
-            )
+
+            def process_codec_like_segment(segment):
+                segment = segment.reshape(-1, self.codec_token_per_frame)
+                segment = segment[:, :self.codec_token_in_use]
+
+                if modality == "spk":
+                    # speaker prompt has a fixed length
+                    if len(segment) > self.speaker_prompt_length:
+                        start = random.randint(
+                            0, len(segment) - self.speaker_prompt_length - 1
+                        )
+                        segment = segment[start : start + self.speaker_prompt_length]
+                    elif self.pad_speaker_prompt:
+                        pad_len = self.speaker_prompt_length - len(segment)
+                        segment = np.pad(
+                            segment,
+                            ((0, pad_len), (0, 0)),
+                            mode="constant",
+                            constant_values=self.pad,
+                        )
+
+                return np.where(
+                    segment == self.pad,
+                    self.pad,
+                    segment + token_bias
+                )
+
+            if (
+                name == "cache_wav.scp"
+                and modality == "codec_ssl"
+                and isinstance(value, (list, tuple))
+            ):
+                enroll_segments = []
+                for idx, segment in enumerate(value):
+                    spk_idx = min(idx + 1, 5)
+                    marker = self.special_token(f"<enroll_spk{spk_idx}>")
+                    segment = process_codec_like_segment(segment)
+                    enroll_segments.extend([marker.reshape(1, -1), segment])
+                value = np.concatenate(enroll_segments, axis=0)
+            else:
+                if isinstance(value, (list, tuple)):
+                    value = np.concatenate(value, axis=0)
+                value = process_codec_like_segment(value)
             
             conti_feat = None
 

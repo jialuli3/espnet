@@ -2303,23 +2303,31 @@ class AbsTask(ABC):
             if 'model' in state_dict:
                 state_dict = state_dict['model']
                 logging.info(f"state dict, {state_dict}")
-            model.load_state_dict(
-                state_dict,
-                strict=True,
-            )
             try:
-                state_dict = torch.load(model_file, map_location='cpu')
-                if 'model' in state_dict:
-                    state_dict = state_dict['model']
                 model.load_state_dict(
                     state_dict,
                     strict=True,
                 )
             except RuntimeError:
+                model_state_dict = model.state_dict()
+                missing_keys = sorted(set(model_state_dict) - set(state_dict))
+                unexpected_keys = sorted(set(state_dict) - set(model_state_dict))
+                if (
+                    len(missing_keys) > 0
+                    and len(unexpected_keys) == 0
+                    and all(k.endswith(".alpha") for k in missing_keys)
+                ):
+                    logging.warning(
+                        "Filling missing Snake activation alpha parameters from "
+                        f"their initialized defaults: {missing_keys}"
+                    )
+                    state_dict = dict(state_dict)
+                    for k in missing_keys:
+                        state_dict[k] = model_state_dict[k]
+                    model.load_state_dict(state_dict, strict=True)
                 # Note(simpleoier): the following part is to be compatible with
                 #   pretrained model using earlier versions before `0a625088`
-                state_dict = torch.load(model_file, map_location='cpu')
-                if any(["frontend.upstream.model" in k for k in state_dict.keys()]):
+                elif any(["frontend.upstream.model" in k for k in state_dict.keys()]):
                     if any(
                         [
                             "frontend.upstream.upstream.model" in k

@@ -57,6 +57,7 @@ class SpeechLM:
         maxlenratio: float = 0.0,
         minlenratio: float = 10.0,
         fixed_length: bool = False,
+        stop_tokens: Optional[List[str]] = None,
         codec_conf: dict = None,
         start_modality_index: int = 35, 
         max_stream: int = 0, 
@@ -82,6 +83,11 @@ class SpeechLM:
         self.modalities = [triplet[1] for triplet in self.task.data_triplets]
         self.pad = self.token_list.index("<pad>")
         self.max_stream = max_stream
+        if stop_tokens is None:
+            stop_tokens = []
+        elif isinstance(stop_tokens, str):
+            stop_tokens = [stop_tokens]
+        stop_token_ids = tuple(self.token_list.index(t) for t in stop_tokens)
 
         # (2) predict mask
         self.inference_nq = model.corelm.nq if inference_nq is None else inference_nq
@@ -159,6 +165,7 @@ class SpeechLM:
             fixed_length=fixed_length,
             start_modality_index=start_modality_index,
             max_stream=max_stream,
+            stop_token_ids=stop_token_ids,
         )
 
         # (4) Only a limited number of modalities support detokenization
@@ -366,6 +373,8 @@ def inference(
     maxlenratio: float = 10.0,
     inference_nq: Optional[int] = 1,
     fixed_length: bool = False,
+    save_audio: bool = True,
+    stop_tokens: Optional[List[str]] = None,
     # offline tokenizers
     codec_conf: dict = None,
     start_modality_index: int = 35, 
@@ -408,6 +417,7 @@ def inference(
         maxlenratio=maxlenratio,
         minlenratio=minlenratio,
         fixed_length=fixed_length,
+        stop_tokens=stop_tokens,
         task=task,
         codec_conf=codec_conf,
         start_modality_index=start_modality_index,
@@ -492,6 +502,8 @@ def inference(
                 # 5.3 save tokenized results
                 if detokenized is not None:
                     if modality in ["codec", "spk", "codec_ssl"]:
+                        if not save_audio:
+                            continue
                         # NOTE(Jinchuan): some example names are really long
                         # and contains "/"
                         example_name_ = example_name.replace("/", "_")[-64:]
@@ -672,6 +684,19 @@ def get_parser():
              "The inference is specified by the fixed_length_key of "
              "each task definition "
              "E.g., inference length for speech enhancement is the same as the mix.scp "
+    )
+    group.add_argument(
+        "--save_audio",
+        type=str2bool,
+        default=True,
+        help="Save detokenized codec audio waveforms",
+    )
+    group.add_argument(
+        "--stop_tokens",
+        type=str,
+        nargs="*",
+        default=[],
+        help="Token strings that trigger early stopping during decoding",
     )
 
     group.add_argument(
