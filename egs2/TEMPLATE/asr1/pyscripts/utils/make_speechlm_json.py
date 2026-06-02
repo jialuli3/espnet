@@ -8,7 +8,10 @@ import json
 import logging
 from pathlib import Path
 
-from espnet2.speechlm.definitions import tasks
+try:
+    from espnet2.speechlm.definitions import tasks
+except ImportError:
+    from espnet2.speechlm.definitions import SPEECHLM_TASKS as tasks
 
 
 def get_parser():
@@ -60,7 +63,10 @@ def main():
     # (2) make sure all examples are ordered and paired
     # (2.1) match all input files with the required files
     file_triplets = []
-    all_entries_required = task_format.encoder_entries + task_format.decoder_entries
+    if hasattr(task_format, "encoder_entries"):
+        all_entries_required = task_format.encoder_entries + task_format.decoder_entries
+    else:
+        all_entries_required = task_format.conditions + task_format.targets
     all_entries_provided = [e.strip().split(",") for e in args.file_modality_type]
     for tgt_name, tgt_modality, tgt_type in all_entries_required:
         entry_found = False
